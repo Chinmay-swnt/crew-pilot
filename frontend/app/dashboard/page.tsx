@@ -22,6 +22,7 @@ import {
   Radio,
   Zap,
 } from "lucide-react";
+import CreateEventModal from "@/components/EventForm";
 
 // Types matching your expected Supabase schema
 interface DashboardStats {
@@ -50,6 +51,7 @@ interface UpcomingEvent {
 }
 
 export default function OrganizerDashboard() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([]);
@@ -61,7 +63,6 @@ export default function OrganizerDashboard() {
         setLoading(true);
 
         // SUPABASE INTEGRATION POINT:
-        // Replace mock state updates with your Supabase queries:
         // const { data: statsData } = await supabase.from('organizer_stats').select('*').single();
         // const { data: recoData } = await supabase.from('recommendations').select('*').limit(3);
         // const { data: eventsData } = await supabase.from('events').select('*').order('start_date', { ascending: true }).limit(3);
@@ -168,7 +169,10 @@ export default function OrganizerDashboard() {
         </div>
 
         <div className="px-3 pb-6 flex flex-col gap-4">
-          <button className="w-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-blue-600/30">
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-blue-600/30"
+          >
             <Plus size={18} />
             Create Event
           </button>
@@ -228,9 +232,11 @@ export default function OrganizerDashboard() {
                 Organizer Dashboard
               </h2>
             </div>
-            <button className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2 shadow-sm transition-colors">
-              <Plus size={16} />
-              Create New Event
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2 shadow-md shadow-blue-600/20 transition-colors"
+            >
+              <Plus size={18} /> Create New Event
             </button>
           </div>
 
@@ -365,6 +371,13 @@ export default function OrganizerDashboard() {
           </div>
         </div>
       </main>
+
+      {/* MODAL COMPONENT */}
+      <CreateEventModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onFindOptimalCrew={(data) => console.log("Matching crews for:", data)}
+      />
     </div>
   );
 }
