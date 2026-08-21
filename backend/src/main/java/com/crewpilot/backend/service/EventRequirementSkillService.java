@@ -3,6 +3,7 @@ package com.crewpilot.backend.service;
 import com.crewpilot.backend.entity.EventRequirement;
 import com.crewpilot.backend.entity.EventRequirementSkill;
 import com.crewpilot.backend.entity.Skill;
+import com.crewpilot.backend.exception.ResourceNotFoundException;
 import com.crewpilot.backend.repository.EventRequirementRepository;
 import com.crewpilot.backend.repository.EventRequirementSkillRepository;
 import com.crewpilot.backend.repository.SkillRepository;
@@ -22,6 +23,13 @@ public class EventRequirementSkillService {
   public List<EventRequirementSkill> getSkillsForRequirement(
     Long requirementId
   ) {
+    requirementRepository.findById(requirementId)
+      .orElseThrow(() ->
+        new ResourceNotFoundException(
+          "Requirement not found: " + requirementId
+        )
+      );
+
     return requirementSkillRepository
       .findByEventRequirementId(requirementId);
   }
@@ -52,13 +60,23 @@ public class EventRequirementSkillService {
     );
   }
 
-  public void removeSkillFromRequirement(Long id) {
+  public void removeSkillFromRequirement(
+    Long requirementId,
+    Long skillId
+  ) {
     EventRequirementSkill existing =
-      requirementSkillRepository.findById(id)
+      requirementSkillRepository.findByEventRequirementId(requirementId)
+        .stream()
+        .filter(item ->
+          item.getSkill() != null &&
+            item.getSkill().getId().equals(skillId)
+        )
+        .findFirst()
         .orElseThrow(() ->
           new RuntimeException(
-            "Requirement skill not found: " + id
-          ));
+            "Skill not found for requirement: " + skillId
+          )
+        );
 
     requirementSkillRepository.delete(existing);
   }

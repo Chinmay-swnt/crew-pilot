@@ -1,5 +1,6 @@
 package com.crewpilot.backend.controller;
 
+import com.crewpilot.backend.dto.BookingResponse;
 import com.crewpilot.backend.entity.Booking;
 import com.crewpilot.backend.service.BookingService;
 import lombok.RequiredArgsConstructor;
@@ -17,55 +18,102 @@ public class BookingController {
   private final BookingService bookingService;
 
   @GetMapping
-  public List<Booking> getAllBookings() {
-    return bookingService.getAllBookings();
+  public List<BookingResponse> getAllBookings() {
+    return bookingService.getAllBookings()
+      .stream()
+      .map(this::toResponse)
+      .toList();
   }
 
   @GetMapping("/{id}")
-  public Booking getBooking(@PathVariable Long id) {
-    return bookingService.getBookingById(id);
+  public BookingResponse getBooking(
+    @PathVariable Long id
+  ) {
+    return toResponse(
+      bookingService.getBookingById(id)
+    );
   }
 
   @GetMapping("/event/{eventId}")
-  public List<Booking> getBookingsByEvent(
+  public List<BookingResponse> getBookingsByEvent(
     @PathVariable Long eventId
   ) {
-    return bookingService.getBookingsByEvent(eventId);
+    return bookingService.getBookingsByEvent(eventId)
+      .stream()
+      .map(this::toResponse)
+      .toList();
   }
 
   @GetMapping("/crew/{crewMemberId}")
-  public List<Booking> getBookingsByCrewMember(
+  public List<BookingResponse> getBookingsByCrewMember(
     @PathVariable Long crewMemberId
   ) {
-    return bookingService.getBookingsByCrewMember(crewMemberId);
+    return bookingService.getBookingsByCrewMember(crewMemberId)
+      .stream()
+      .map(this::toResponse)
+      .toList();
   }
 
   @GetMapping("/status/{status}")
-  public List<Booking> getBookingsByStatus(
+  public List<BookingResponse> getBookingsByStatus(
     @PathVariable String status
   ) {
-    return bookingService.getBookingsByStatus(status);
+    return bookingService.getBookingsByStatus(status)
+      .stream()
+      .map(this::toResponse)
+      .toList();
   }
 
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
-  public Booking createBooking(
+  public BookingResponse createBooking(
     @RequestBody Booking booking
   ) {
-    return bookingService.createBooking(booking);
+    return toResponse(
+      bookingService.createBooking(booking)
+    );
   }
 
   @PutMapping("/{id}")
-  public Booking updateBooking(
+  public BookingResponse updateBooking(
     @PathVariable Long id,
     @RequestBody Booking booking
   ) {
-    return bookingService.updateBooking(id, booking);
+    return toResponse(
+      bookingService.updateBooking(id, booking)
+    );
   }
 
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  public void deleteBooking(@PathVariable Long id) {
+  public void deleteBooking(
+    @PathVariable Long id
+  ) {
     bookingService.deleteBooking(id);
+  }
+
+  private BookingResponse toResponse(Booking booking) {
+    return new BookingResponse(
+      booking.getId(),
+      booking.getEvent() != null
+        ? booking.getEvent().getId()
+        : null,
+      booking.getCrewMember() != null
+        ? booking.getCrewMember().getId()
+        : null,
+      booking.getCrewMember() != null
+        ? booking.getCrewMember().getName()
+        : null,
+      booking.getRole() != null
+        ? booking.getRole().getId()
+        : null,
+      booking.getRole() != null
+        ? booking.getRole().getName()
+        : null,
+      booking.getStatus(),
+      booking.getAgreedPrice(),
+      booking.getVersion(),
+      booking.getBookedAt()
+    );
   }
 }

@@ -36,20 +36,24 @@ public class CrewMemberController {
 
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
-  public CrewMember createCrewMember(
+  public CrewMemberResponse createCrewMember(
     @RequestBody CrewMember crewMember
   ) {
-    return crewMemberService.createCrewMember(crewMember);
+    return toResponse(
+      crewMemberService.createCrewMember(crewMember)
+    );
   }
 
   @PutMapping("/{id}")
-  public CrewMember updateCrewMember(
+  public CrewMemberResponse updateCrewMember(
     @PathVariable Long id,
     @RequestBody CrewMember crewMember
   ) {
-    return crewMemberService.updateCrewMember(
-      id,
-      crewMember
+    return toResponse(
+      crewMemberService.updateCrewMember(
+        id,
+        crewMember
+      )
     );
   }
 

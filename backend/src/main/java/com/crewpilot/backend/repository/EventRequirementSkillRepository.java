@@ -13,4 +13,10 @@ public interface EventRequirementSkillRepository
   );
 
   List<EventRequirementSkill> findBySkillId(Long skillId);
+
+  boolean existsByEventRequirementIdAndSkillId(
+    Long eventRequirementId,
+    Long skillId
+  );
+
 }

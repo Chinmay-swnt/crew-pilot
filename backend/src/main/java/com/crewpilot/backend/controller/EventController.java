@@ -38,16 +38,20 @@ public class EventController {
 
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
-  public Event createEvent(@RequestBody Event event) {
-    return eventService.createEvent(event);
+  public EventResponse createEvent(@RequestBody Event event) {
+    return toResponse(
+      eventService.createEvent(event)
+    );
   }
 
   @PutMapping("/{id}")
-  public Event updateEvent(
+  public EventResponse updateEvent(
     @PathVariable Long id,
     @RequestBody Event event
   ) {
-    return eventService.updateEvent(id, event);
+    return toResponse(
+      eventService.updateEvent(id, event)
+    );
   }
 
   @DeleteMapping("/{id}")
