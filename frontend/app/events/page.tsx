@@ -51,49 +51,6 @@ export default function CreateEventPage() {
 
   return (
     <div className="flex h-screen w-full bg-[#F8FAFC] font-sans">
-      {/* SIDEBAR */}
-      <aside className="w-64 bg-[#0F172A] text-slate-400 flex flex-col justify-between shrink-0">
-        <div>
-          {/* Logo */}
-          <div className="h-20 flex items-center px-6 gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg">
-              <Rocket size={20} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-white font-bold text-xl leading-tight">
-                CrewPilot
-              </h1>
-              <p className="text-xs text-slate-400">AI Staffing Hub</p>
-            </div>
-          </div>
-
-          {/* Sidebar Action */}
-          <div className="px-4 mb-6">
-            <button className="w-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-colors">
-              <Plus size={16} />
-              Create Event
-            </button>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex flex-col gap-1 px-3">
-            <NavItem icon={<LayoutDashboard size={18} />} label="Dashboard" />
-            <NavItem icon={<Calendar size={18} />} label="Events" isActive />
-            <NavItem icon={<Users size={18} />} label="Crew" />
-            <NavItem icon={<Sparkles size={18} />} label="Recommendations" />
-            <NavItem icon={<FileText size={18} />} label="Bookings" />
-            <NavItem icon={<BarChart2 size={18} />} label="Analytics" />
-            <NavItem icon={<Settings size={18} />} label="Settings" />
-          </nav>
-        </div>
-
-        {/* Bottom Actions */}
-        <div className="px-3 pb-6 border-t border-slate-800 pt-4 flex flex-col gap-1">
-          <NavItem icon={<HelpCircle size={18} />} label="Support" />
-          <NavItem icon={<LogOut size={18} />} label="Logout" />
-        </div>
-      </aside>
-
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* HEADER */}
