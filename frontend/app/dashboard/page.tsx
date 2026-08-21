@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRouter } from 'next/navigation';
 import {
   Plus,
   Calendar,
@@ -14,7 +15,8 @@ import {
   Radio,
   Zap,
 } from "lucide-react";
-import CreateEventModal from "@/components/EventForm";
+import CreateEventModal from "@/components/CreateEventModal";
+// import CreateEventModal from "@/components/EventForm";
 
 // Types matching your expected Supabase schema
 interface DashboardStats {
@@ -48,85 +50,31 @@ export default function OrganizerDashboard() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();   // ← ADD THIS LINE
+
 
   useEffect(() => {
-    async function fetchDashboardData() {
-      try {
-        setLoading(true);
+  async function fetchDashboardData() {
+    try {
+      setLoading(true);
+      const organizerId = 1; // TODO: replace with real auth session organizer id
 
-        // SUPABASE INTEGRATION POINT:
-        // const { data: statsData } = await supabase.from('organizer_stats').select('*').single();
-        // const { data: recoData } = await supabase.from('recommendations').select('*').limit(3);
-        // const { data: eventsData } = await supabase.from('events').select('*').order('start_date', { ascending: true }).limit(3);
+      const res = await fetch(`/api/dashboard-stats?organizer_id=${organizerId}`);
+      const data = await res.json();
 
-        setStats({
-          upcomingEventsCount: 3,
-          activeEventsCount: 12,
-          totalCrewBooked: 48,
-          avgReliability: 97,
-          budgetSaved: "₹1.2 L",
-          budgetSavedPercent: "+15%",
-        });
-
-        setRecommendations([
-          {
-            id: "1",
-            name: "Sarah J.",
-            role: "Lead Rigger",
-            matchScore: 98,
-            avatarUrl:
-              "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
-          },
-          {
-            id: "2",
-            name: "David M.",
-            role: "A/V Tech",
-            matchScore: 95,
-            avatarUrl:
-              "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
-          },
-          {
-            id: "3",
-            name: "Priya K.",
-            role: "Event Coord.",
-            matchScore: 92,
-            avatarUrl:
-              "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80",
-          },
-        ]);
-
-        setUpcomingEvents([
-          {
-            id: "e1",
-            title: "Tech Summit 2024",
-            dateRange: "Oct 12 - 14, 2024",
-            crewedCount: 18,
-            totalCrewNeeded: 20,
-          },
-          {
-            id: "e2",
-            title: "Global Music Fest",
-            dateRange: "Nov 05, 2024",
-            crewedCount: 5,
-            totalCrewNeeded: 45,
-          },
-          {
-            id: "e3",
-            title: "Corporate Retreat",
-            dateRange: "Dec 01, 2024",
-            crewedCount: 0,
-            totalCrewNeeded: 12,
-          },
-        ]);
-      } catch (err) {
-        console.error("Error fetching dashboard data:", err);
-      } finally {
-        setLoading(false);
-      }
+      setStats(data.stats);
+      setUpcomingEvents(data.upcomingEvents);
+      setRecommendations(data.recommendations);
+    } catch (err) {
+      console.error("Error fetching dashboard data:", err);
+    } finally {
+      setLoading(false);
     }
+  }
 
-    fetchDashboardData();
-  }, []);
+  fetchDashboardData();
+}, []);
+
 
   return (
     <div className="flex-1 flex flex-col font-sans">
@@ -316,11 +264,14 @@ export default function OrganizerDashboard() {
       </div>
 
       {/* MODAL COMPONENT */}
-      <CreateEventModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onFindOptimalCrew={(data) => console.log("Matching crews for:", data)}
-      />
+          <CreateEventModal
+  isOpen={isModalOpen}
+  onClose={() => setIsModalOpen(false)}
+  onFindOptimalCrew={(eventId: number) => {
+    router.push(`/events/${eventId}`);
+  }}
+  organizerId={1}
+/>
     </div>
   );
 }

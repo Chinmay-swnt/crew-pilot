@@ -1,247 +1,277 @@
-"use client";
+'use client';
 
-import React, { useState } from "react";
-import {
-  X,
-  Pencil,
-  MapPin,
-  Users,
-  Plus,
-  ArrowRight,
-  Sparkles,
-  CheckCircle2,
-  SlidersHorizontal,
-  Calendar,
-} from "lucide-react";
+import { useEffect, useState } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 
-interface CreateEventModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onFindOptimalCrew?: (data: any) => void;
+interface Role {
+  id: number;
+  name: string;
+}
+interface Skill {
+  id: number;
+  name: string;
+}
+interface RequirementRow {
+  role_id: number;
+  quantity: number;
+  required_experience: number;
+  skill_ids: number[];
 }
 
-export default function CreateEventModal({
-  isOpen,
-  onClose,
-  onFindOptimalCrew,
-}: CreateEventModalProps) {
-  if (!isOpen) return null;
+export default function EventForm({
+  organizerId,
+  onCreated,
+}: {
+  organizerId: number;
+  onCreated: (eventId: number) => void;
+}) {
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Extracted AI Data State
-  const [eventDetails, setEventDetails] = useState({
-    eventType: "Wedding",
-    location: "Pune",
-    date: "20 September",
-    guests: 300,
-  });
-
-  const [parameters, setParameters] = useState({
-    budget: "₹1,00,000",
-    priorities: ["High reliability", "Premium quality", "Budget-conscious"],
-  });
-
-  const [requiredCrew, setRequiredCrew] = useState([
-    { id: "1", role: "Photographer", count: 2 },
-    { id: "2", role: "Cinematic Videographer", count: 1 },
-    { id: "3", role: "DJ", count: 1 },
-    { id: "4", role: "Decorator", count: 1 },
+  const [name, setName] = useState('');
+  const [eventType, setEventType] = useState('');
+  const [date, setDate] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [location, setLocation] = useState('');
+  const [guestCount, setGuestCount] = useState('');
+  const [budget, setBudget] = useState('');
+  const [requirements, setRequirements] = useState<RequirementRow[]>([
+    { role_id: 0, quantity: 1, required_experience: 0, skill_ids: [] },
   ]);
 
-  const handleAddRole = () => {
-    const roleName = prompt("Enter new role name:");
-    if (roleName) {
-      setRequiredCrew([
-        ...requiredCrew,
-        { id: Date.now().toString(), role: roleName, count: 1 },
-      ]);
-    }
+  useEffect(() => {
+    fetch('/api/roles').then((r) => r.json()).then((d) => setRoles(d.roles ?? []));
+    fetch('/api/skills').then((r) => r.json()).then((d) => setSkills(d.skills ?? []));
+  }, []);
+
+  const addRequirement = () => {
+    setRequirements((r) => [...r, { role_id: 0, quantity: 1, required_experience: 0, skill_ids: [] }]);
   };
 
-  const handleSubmit = () => {
-    if (onFindOptimalCrew) {
-      onFindOptimalCrew({ eventDetails, parameters, requiredCrew });
+  const removeRequirement = (idx: number) => {
+    setRequirements((r) => r.filter((_, i) => i !== idx));
+  };
+
+  const updateRequirement = (idx: number, patch: Partial<RequirementRow>) => {
+    setRequirements((r) => r.map((row, i) => (i === idx ? { ...row, ...patch } : row)));
+  };
+
+  const toggleSkill = (idx: number, skillId: number) => {
+    setRequirements((r) =>
+      r.map((row, i) => {
+        if (i !== idx) return row;
+        const has = row.skill_ids.includes(skillId);
+        return {
+          ...row,
+          skill_ids: has ? row.skill_ids.filter((s) => s !== skillId) : [...row.skill_ids, skillId],
+        };
+      })
+    );
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizer_id: organizerId,
+          name,
+          event_type: eventType,
+          date,
+          start_time: startTime || null,
+          end_time: endTime || null,
+          location,
+          guest_count: guestCount ? Number(guestCount) : null,
+          budget: budget ? Number(budget) : null,
+          requirements: requirements.filter((r) => r.role_id !== 0),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to create event');
+      onCreated(data.event.id);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-    onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="relative w-full max-w-4xl bg-[#F8FAFC] rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto flex flex-col">
-        {/* HEADER BAR */}
-        <div className="h-14 bg-white border-b border-slate-200 px-6 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <div className="flex items-center gap-1.5 text-slate-900">
-              <Sparkles size={16} className="text-blue-600" />
-              <span className="font-bold">CrewPilot</span>
-            </div>
-            <span className="text-slate-300">/</span>
-            <span className="text-slate-500 font-medium">Create Event</span>
-          </div>
+    <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="col-span-2">
+          <label className="text-xs font-medium text-slate-600 mb-1.5 block">Event name</label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-slate-600 mb-1.5 block">Event type</label>
+          <input
+            value={eventType}
+            onChange={(e) => setEventType(e.target.value)}
+            placeholder="Wedding, Corporate..."
+            className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-slate-600 mb-1.5 block">Date</label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            required
+            className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-slate-600 mb-1.5 block">Start time</label>
+          <input
+            type="time"
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+            className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-slate-600 mb-1.5 block">End time</label>
+          <input
+            type="time"
+            value={endTime}
+            onChange={(e) => setEndTime(e.target.value)}
+            className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-slate-600 mb-1.5 block">Location</label>
+          <input
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-slate-600 mb-1.5 block">Guest count</label>
+          <input
+            type="number"
+            value={guestCount}
+            onChange={(e) => setGuestCount(e.target.value)}
+            className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-slate-600 mb-1.5 block">Budget (₹)</label>
+          <input
+            type="number"
+            value={budget}
+            onChange={(e) => setBudget(e.target.value)}
+            className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-xs font-medium text-slate-600">Crew requirements</label>
           <button
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+            type="button"
+            onClick={addRequirement}
+            className="text-xs text-indigo-600 flex items-center gap-1 hover:underline"
           >
-            <X size={18} />
+            <Plus className="w-3 h-3" /> Add role
           </button>
         </div>
 
-        {/* MODAL CONTENT */}
-        <div className="p-8 space-y-6">
-          {/* TITLE & AI STATUS */}
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 border border-purple-100 text-purple-700 text-[11px] font-bold tracking-wide uppercase mb-3">
-              <CheckCircle2 size={13} className="fill-purple-600 text-white" />
-              <span>AI Analysis Complete</span>
-            </div>
-            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-              Here’s what we understood
-            </h2>
-            <p className="text-slate-500 text-sm mt-1">
-              Review the extracted details from your prompt. Edit any fields
-              before we begin matching crews.
-            </p>
-          </div>
-
-          {/* TWO-COLUMN CARDS */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
-            {/* EVENT DETAILS */}
-            <div className="md:col-span-7 bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs relative">
-              <div className="flex items-center justify-between mb-5 border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2 text-slate-800 font-bold text-base">
-                  <Calendar size={18} className="text-slate-500" />
-                  <span>Event Details</span>
-                </div>
-                <button className="text-slate-400 hover:text-slate-600 p-1 transition-colors">
-                  <Pencil size={16} />
+        <div className="space-y-3">
+          {requirements.map((row, idx) => (
+            <div key={idx} className="border border-slate-200 rounded-lg p-3 space-y-2">
+              <div className="flex gap-2">
+                <select
+                  value={row.role_id}
+                  onChange={(e) => updateRequirement(idx, { role_id: Number(e.target.value) })}
+                  className="flex-1 px-2 py-2 text-sm rounded-lg border border-slate-200"
+                >
+                  <option value={0}>Select role</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min={1}
+                  value={row.quantity}
+                  onChange={(e) => updateRequirement(idx, { quantity: Number(e.target.value) })}
+                  className="w-16 px-2 py-2 text-sm rounded-lg border border-slate-200"
+                  title="Quantity"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  value={row.required_experience}
+                  onChange={(e) =>
+                    updateRequirement(idx, { required_experience: Number(e.target.value) })
+                  }
+                  className="w-20 px-2 py-2 text-sm rounded-lg border border-slate-200"
+                  title="Min experience (years)"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeRequirement(idx)}
+                  className="text-slate-400 hover:text-red-500"
+                >
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-y-4 gap-x-6">
-                <div>
-                  <span className="text-xs font-semibold text-slate-400 block mb-1">
-                    Event Type
-                  </span>
-                  <span className="text-base font-bold text-slate-800">
-                    {eventDetails.eventType}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-xs font-semibold text-slate-400 block mb-1">
-                    Location
-                  </span>
-                  <span className="text-base font-bold text-slate-800 flex items-center gap-1">
-                    <MapPin size={14} className="text-slate-400" />
-                    {eventDetails.location}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-xs font-semibold text-slate-400 block mb-1">
-                    Date
-                  </span>
-                  <span className="text-base font-bold text-slate-800">
-                    {eventDetails.date}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-xs font-semibold text-slate-400 block mb-1">
-                    Guests
-                  </span>
-                  <span className="text-base font-bold text-slate-800">
-                    {eventDetails.guests}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* PARAMETERS */}
-            <div className="md:col-span-5 bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs relative flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
-                  <div className="flex items-center gap-2 text-slate-800 font-bold text-base">
-                    <SlidersHorizontal size={18} className="text-slate-500" />
-                    <span>Parameters</span>
-                  </div>
-                  <button className="text-slate-400 hover:text-slate-600 p-1 transition-colors">
-                    <Pencil size={16} />
+              <div className="flex flex-wrap gap-1.5">
+                {skills.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => toggleSkill(idx, s.id)}
+                    className={`text-xs px-2 py-1 rounded-full border ${
+                      row.skill_ids.includes(s.id)
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'border-slate-200 text-slate-500'
+                    }`}
+                  >
+                    {s.name}
                   </button>
-                </div>
-
-                <div className="mb-4">
-                  <span className="text-xs font-semibold text-slate-400 block mb-1">
-                    Budget Allocation
-                  </span>
-                  <span className="text-2xl font-black text-slate-900 tracking-tight">
-                    {parameters.budget}
-                  </span>
-                </div>
-
-                <div>
-                  <span className="text-xs font-semibold text-slate-400 block mb-2">
-                    AI Priorities Detected
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    {parameters.priorities.map((priority, index) => (
-                      <span
-                        key={index}
-                        className="bg-blue-50/80 text-blue-800 border border-blue-100 text-xs font-semibold px-3 py-1 rounded-full"
-                      >
-                        {priority}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
-          </div>
-
-          {/* REQUIRED CREW CARD */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs border-l-4 border-l-blue-600">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2 text-slate-900 font-bold text-base">
-                <Users size={18} className="text-blue-600" />
-                <span>Required Crew</span>
-              </div>
-              <button
-                onClick={handleAddRole}
-                className="border border-blue-200 bg-blue-50/50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
-              >
-                <Plus size={14} />
-                Add Role
-              </button>
-            </div>
-            <p className="text-xs text-slate-400 font-medium mb-5">
-              AI determined these roles are optimal for your event scope.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-              {requiredCrew.map((item) => (
-                <div
-                  key={item.id}
-                  className="bg-slate-50/80 border border-slate-100 rounded-xl p-3.5 flex items-center gap-3"
-                >
-                  <span className="w-8 h-8 rounded-lg bg-blue-100/70 text-blue-700 font-black text-sm flex items-center justify-center shrink-0">
-                    {item.count}
-                  </span>
-                  <span className="text-xs font-bold text-slate-800 leading-snug">
-                    {item.role}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* PRIMARY ACTION */}
-          <div className="flex justify-center pt-2">
-            <button
-              onClick={handleSubmit}
-              className="bg-blue-700 hover:bg-blue-800 text-white font-bold text-sm px-8 py-3.5 rounded-xl flex items-center gap-2 shadow-lg shadow-blue-600/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
-            >
-              <span>Find Optimal Crew</span>
-              <ArrowRight size={18} />
-            </button>
-          </div>
+          ))}
         </div>
       </div>
-    </div>
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-medium py-2.5 rounded-lg"
+      >
+        {loading ? 'Creating...' : 'Create Event'}
+      </button>
+    </form>
   );
 }
