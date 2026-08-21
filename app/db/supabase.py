@@ -2,6 +2,8 @@ from supabase import create_client, Client
 from app.core.config import settings
 
 def get_supabase_client() -> Client:
+    if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
+        raise ValueError("SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing from environment variables.")
     return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
 
 class CrewRepository:
@@ -9,7 +11,6 @@ class CrewRepository:
         self.client = get_supabase_client()
 
     def match_crew_by_vector(self, embedding: list[float], role_name: str, match_count: int = 10):
-        """Calls the RPC match_crew function in Supabase."""
         response = self.client.rpc(
             "match_crew",
             {
@@ -21,7 +22,6 @@ class CrewRepository:
         return response.data
 
     def check_availability(self, crew_id: int, event_date: str) -> bool:
-        """Checks if a crew member is available on a specific date."""
         res = self.client.table("availability") \
             .select("is_available") \
             .eq("crew_member_id", crew_id) \
@@ -29,10 +29,9 @@ class CrewRepository:
             .execute()
         if res.data:
             return res.data[0].get("is_available", True)
-        return True  # Default to available if no record exists
+        return True
 
     def get_performance_reviews(self, crew_id: int) -> list[str]:
-        """Fetches client feedback from performance_history for Agent 3."""
         res = self.client.table("performance_history") \
             .select("client_feedback") \
             .eq("crew_member_id", crew_id) \
