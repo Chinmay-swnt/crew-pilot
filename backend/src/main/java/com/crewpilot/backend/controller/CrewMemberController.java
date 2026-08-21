@@ -1,5 +1,6 @@
 package com.crewpilot.backend.controller;
 
+import com.crewpilot.backend.dto.CrewMemberResponse;
 import com.crewpilot.backend.entity.CrewMember;
 import com.crewpilot.backend.service.CrewMemberService;
 import lombok.RequiredArgsConstructor;
@@ -17,13 +18,20 @@ public class CrewMemberController {
   private final CrewMemberService crewMemberService;
 
   @GetMapping
-  public List<CrewMember> getAllCrewMembers() {
-    return crewMemberService.getAllCrewMembers();
+  public List<CrewMemberResponse> getAllCrewMembers() {
+    return crewMemberService.getAllCrewMembers()
+      .stream()
+      .map(this::toResponse)
+      .toList();
   }
 
   @GetMapping("/{id}")
-  public CrewMember getCrewMember(@PathVariable Long id) {
-    return crewMemberService.getCrewMemberById(id);
+  public CrewMemberResponse getCrewMember(
+    @PathVariable Long id
+  ) {
+    return toResponse(
+      crewMemberService.getCrewMemberById(id)
+    );
   }
 
   @PostMapping
@@ -39,12 +47,40 @@ public class CrewMemberController {
     @PathVariable Long id,
     @RequestBody CrewMember crewMember
   ) {
-    return crewMemberService.updateCrewMember(id, crewMember);
+    return crewMemberService.updateCrewMember(
+      id,
+      crewMember
+    );
   }
 
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  public void deleteCrewMember(@PathVariable Long id) {
+  public void deleteCrewMember(
+    @PathVariable Long id
+  ) {
     crewMemberService.deleteCrewMember(id);
+  }
+
+  private CrewMemberResponse toResponse(
+    CrewMember member
+  ) {
+    return new CrewMemberResponse(
+      member.getId(),
+      member.getName(),
+      member.getPhone(),
+      member.getEmail(),
+      member.getBio(),
+      member.getExperienceYears(),
+      member.getBasePrice(),
+      member.getLocation(),
+      member.getLatitude(),
+      member.getLongitude(),
+      member.getRating(),
+      member.getReliabilityScore(),
+      member.getStatus(),
+      member.getRole() != null
+        ? member.getRole().getId()
+        : null
+    );
   }
 }

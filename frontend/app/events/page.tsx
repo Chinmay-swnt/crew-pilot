@@ -1,158 +1,256 @@
 "use client";
 
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
-  Rocket,
+  ArrowUpRight,
+  CalendarDays,
   Plus,
-  LayoutDashboard,
-  Calendar,
-  Users,
-  Sparkles,
-  FileText,
-  BarChart2,
-  Settings,
-  HelpCircle,
-  LogOut,
-  Search,
-  Bell,
-  SlidersHorizontal,
-  Pencil,
+  RefreshCw,
 } from "lucide-react";
+import { api } from "@/lib/api";
 
-export default function CreateEventPage() {
-  // State for the main AI prompt input
-  const [eventDescription, setEventDescription] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+interface Event {
+  id: number;
+  title?: string;
+  name?: string;
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  location?: string;
+  status?: string;
+}
 
-  // TODO: Fetch this user data from Supabase Auth / Profiles table
-  const userProfile = {
-    avatarUrl: "https://i.pravatar.cc/150?img=47", // Placeholder
-  };
+export default function EventsPage() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Handler to send data to Supabase / your AI edge function
-  const handleUnderstandRequirements = async () => {
-    if (!eventDescription.trim()) return;
-
-    setIsSubmitting(true);
+  async function loadEvents() {
     try {
-      // SUPABASE INTEGRATION POINT:
-      // const { data, error } = await supabase.functions.invoke('extract-requirements', {
-      //   body: { description: eventDescription }
-      // });
-      console.log("Submitting to AI processing:", eventDescription);
+      setLoading(true);
+      setError(null);
 
-      // Handle the response...
-    } catch (error) {
-      console.error("Error processing requirements:", error);
+      const data = await api.getEvents();
+
+      setEvents(data as Event[]);
+    } catch (err) {
+      console.error("Failed to load events:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load events."
+      );
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    loadEvents();
+  }, []);
 
   return (
-    <div className="flex h-screen w-full bg-[#F8FAFC] font-sans">
-      {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* HEADER */}
-        <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0">
-          <div className="relative w-96">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-              size={18}
+    <div className="min-h-full bg-[#f5f3ee]">
+      {/* Header */}
+      <header className="flex min-h-20 items-center justify-between border-b border-[#d8d4ca] px-6 lg:px-8">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#8a6420]">
+            Operations
+          </p>
+
+          <h1 className="mt-1 text-xl font-semibold tracking-tight">
+            Events
+          </h1>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={loadEvents}
+            disabled={loading}
+            className="flex items-center gap-2 border border-[#bcb8ae] px-3 py-2 text-sm font-medium transition-colors hover:border-[#1c1c1c] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw
+              size={15}
+              className={loading ? "animate-spin" : ""}
             />
-            <input
-              type="text"
-              placeholder="Search events, crew, or roles..."
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
-            />
+            Refresh
+          </button>
+
+          <Link
+            href="/events/create"
+            className="flex items-center gap-2 bg-[#17212b] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#263746]"
+          >
+            <Plus size={17} />
+            Create event
+          </Link>
+        </div>
+      </header>
+
+      {/* Content */}
+      <main className="px-6 py-8 lg:px-8">
+        <div className="mb-7 max-w-2xl">
+          <p className="text-sm leading-6 text-[#6b6962]">
+            Manage events, requirements, and staffing needs from one
+            workspace.
+          </p>
+        </div>
+
+        {/* Loading */}
+        {loading && (
+          <div className="border border-[#d8d4ca] bg-[#f8f6f0] p-8">
+            <p className="font-mono text-xs uppercase tracking-[0.12em] text-[#77736a]">
+              Loading events...
+            </p>
           </div>
+        )}
 
-          <div className="flex items-center gap-4">
-            <button className="text-blue-600 p-2 hover:bg-blue-50 rounded-full transition-colors">
-              <Bell size={20} />
-            </button>
-            <button className="text-blue-600 p-2 hover:bg-blue-50 rounded-full transition-colors">
-              <SlidersHorizontal size={20} />
-            </button>
-            <button className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-full text-sm font-medium transition-colors">
-              Create Event
-            </button>
-            {/* User Avatar connected to DB */}
-            <div className="h-9 w-9 rounded-full overflow-hidden border-2 border-slate-200 cursor-pointer ml-2">
-              <img
-                src={userProfile.avatarUrl}
-                alt="User Profile"
-                className="h-full w-full object-cover"
-              />
-            </div>
-          </div>
-        </header>
-
-        {/* PAGE CONTENT */}
-        <div className="flex-1 overflow-y-auto p-8 flex items-center justify-center">
-          <div className="max-w-3xl w-full flex flex-col items-center text-center -mt-20">
-            <div className="bg-blue-50 text-blue-900 p-3 rounded-2xl mb-6">
-              <Sparkles size={28} />
-            </div>
-
-            <h2 className="text-4xl font-bold text-slate-900 mb-4 tracking-tight">
-              Describe your event
-            </h2>
-
-            <p className="text-slate-500 text-lg mb-10 max-w-xl leading-relaxed">
-              In your own words, tell us what you need. Our AI will
-              automatically extract roles, budgets, and operational
-              requirements.
+        {/* Error */}
+        {!loading && error && (
+          <div className="border border-[#c9a6a0] bg-[#f5e9e6] p-6">
+            <p className="font-medium text-[#6d332b]">
+              Could not load events
             </p>
 
-            <div className="w-full relative bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-8 transition-shadow focus-within:shadow-md focus-within:border-blue-300">
-              <div className="absolute top-5 left-5 text-slate-400">
-                <Pencil size={20} />
-              </div>
-              <textarea
-                value={eventDescription}
-                onChange={(e) => setEventDescription(e.target.value)}
-                placeholder="I'm organizing a premium wedding in Pune for 300 guests. I need 2 photographers, a cinematic videographer, DJ and decorator. Budget ₹1 lakh. Reliability is very important."
-                className="w-full min-h-[160px] pl-14 pr-6 py-5 text-slate-700 placeholder:text-slate-400 resize-none focus:outline-none text-lg leading-relaxed"
-              />
-            </div>
+            <p className="mt-2 text-sm text-[#7d514a]">
+              {error}
+            </p>
 
             <button
-              onClick={handleUnderstandRequirements}
-              disabled={isSubmitting || !eventDescription.trim()}
-              className="bg-[#0000FF] hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-8 py-4 rounded-xl text-lg font-semibold flex items-center gap-3 transition-all shadow-lg shadow-blue-500/30"
+              type="button"
+              onClick={loadEvents}
+              className="mt-4 border border-[#6d332b] px-4 py-2 text-sm font-medium text-[#6d332b] hover:bg-[#6d332b] hover:text-white"
             >
-              <Sparkles size={20} />
-              {isSubmitting ? "Analyzing..." : "Understand Requirements"}
+              Try again
             </button>
           </div>
-        </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && !error && events.length === 0 && (
+          <div className="border border-[#d8d4ca] bg-[#f8f6f0] p-10">
+            <div className="flex h-10 w-10 items-center justify-center bg-[#17212b] text-[#d9a441]">
+              <CalendarDays size={19} />
+            </div>
+
+            <h2 className="mt-5 text-lg font-semibold">
+              No events yet
+            </h2>
+
+            <p className="mt-2 max-w-md text-sm leading-6 text-[#6b6962]">
+              Create an event to define its staffing requirements and
+              start building the crew plan.
+            </p>
+
+            <Link
+              href="/events/create"
+              className="mt-6 inline-flex items-center gap-2 bg-[#17212b] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#263746]"
+            >
+              <Plus size={16} />
+              Create event
+            </Link>
+          </div>
+        )}
+
+        {/* Event list */}
+        {!loading && !error && events.length > 0 && (
+          <section className="border border-[#d8d4ca] bg-[#f8f6f0]">
+            <div className="grid grid-cols-[1fr_auto_auto] gap-6 border-b border-[#d8d4ca] px-5 py-3 font-mono text-[10px] uppercase tracking-[0.14em] text-[#77736a]">
+              <span>Event</span>
+              <span>Status</span>
+              <span />
+            </div>
+
+            {events.map((event, index) => {
+              const eventName =
+                event.title ??
+                event.name ??
+                `Event ${event.id}`;
+
+              return (
+                <Link
+                  key={event.id}
+                  href={`/events/${event.id}`}
+                  className={[
+                    "grid grid-cols-[1fr_auto_auto] items-center gap-6 px-5 py-5 transition-colors hover:bg-[#eeece5]",
+                    index !== events.length - 1
+                      ? "border-b border-[#d8d4ca]"
+                      : "",
+                  ].join(" ")}
+                >
+                  <div className="min-w-0">
+                    <h2 className="truncate text-sm font-semibold">
+                      {eventName}
+                    </h2>
+
+                    {event.description && (
+                      <p className="mt-1 max-w-2xl truncate text-xs text-[#6b6962]">
+                        {event.description}
+                      </p>
+                    )}
+
+                    {(event.startDate || event.location) && (
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] text-[#77736a]">
+                        {event.startDate && (
+                          <span>
+                            {formatDate(event.startDate)}
+                            {event.endDate
+                              ? ` — ${formatDate(event.endDate)}`
+                              : ""}
+                          </span>
+                        )}
+
+                        {event.location && (
+                          <span>{event.location}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <StatusLabel status={event.status} />
+
+                  <ArrowUpRight
+                    size={16}
+                    className="text-[#77736a]"
+                  />
+                </Link>
+              );
+            })}
+          </section>
+        )}
       </main>
     </div>
   );
 }
 
-// Reusable Sidebar Item Component
-function NavItem({
-  icon,
-  label,
-  isActive = false,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  isActive?: boolean;
-}) {
+function StatusLabel({ status }: { status?: string }) {
+  if (!status) {
+    return (
+      <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-[#77736a]">
+        —
+      </span>
+    );
+  }
+
   return (
-    <a
-      href="#"
-      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-        isActive
-          ? "bg-slate-800 text-white font-medium shadow-sm border-l-2 border-blue-500"
-          : "hover:bg-slate-800/50 hover:text-slate-300"
-      }`}
-    >
-      {icon}
-      <span className="text-sm">{label}</span>
-    </a>
+    <span className="border border-[#c9c5bb] px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[#5f5c55]">
+      {status}
+    </span>
   );
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
 }

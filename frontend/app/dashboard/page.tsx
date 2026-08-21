@@ -1,348 +1,311 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
+  CalendarDays,
+  Users,
+  ClipboardList,
+  UserCheck,
+  ArrowUpRight,
   Plus,
-  Calendar,
-  Sparkles,
-  Search,
-  Bell,
-  PlayCircle,
-  UserPlus,
-  ShieldCheck,
-  PiggyBank,
-  Radio,
-  Zap,
 } from "lucide-react";
+import { api } from "@/lib/api";
 import CreateEventModal from "@/components/EventForm";
 
-// Types matching your expected Supabase schema
-interface DashboardStats {
-  upcomingEventsCount: number;
-  activeEventsCount: number;
-  totalCrewBooked: number;
-  avgReliability: number;
-  budgetSaved: string;
-  budgetSavedPercent: string;
+interface Event {
+  id: number;
+  title?: string;
+  name?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+interface CrewMember {
+  id: number;
+}
+
+interface Booking {
+  id: number;
 }
 
 interface Recommendation {
-  id: string;
-  name: string;
-  role: string;
-  matchScore: number;
-  avatarUrl: string;
+  id: number;
 }
 
-interface UpcomingEvent {
-  id: string;
-  title: string;
-  dateRange: string;
-  crewedCount: number;
-  totalCrewNeeded: number;
-}
+export default function DashboardPage() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [crew, setCrew] = useState<CrewMember[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [recommendations, setRecommendations] = useState<
+    Recommendation[]
+  >([]);
 
-export default function OrganizerDashboard() {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
-  const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([]);
+  const [isCreateEventOpen, setIsCreateEventOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchDashboardData() {
+    async function loadDashboard() {
       try {
         setLoading(true);
 
-        // SUPABASE INTEGRATION POINT:
-        // const { data: statsData } = await supabase.from('organizer_stats').select('*').single();
-        // const { data: recoData } = await supabase.from('recommendations').select('*').limit(3);
-        // const { data: eventsData } = await supabase.from('events').select('*').order('start_date', { ascending: true }).limit(3);
-
-        setStats({
-          upcomingEventsCount: 3,
-          activeEventsCount: 12,
-          totalCrewBooked: 48,
-          avgReliability: 97,
-          budgetSaved: "₹1.2 L",
-          budgetSavedPercent: "+15%",
-        });
-
-        setRecommendations([
-          {
-            id: "1",
-            name: "Sarah J.",
-            role: "Lead Rigger",
-            matchScore: 98,
-            avatarUrl:
-              "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
-          },
-          {
-            id: "2",
-            name: "David M.",
-            role: "A/V Tech",
-            matchScore: 95,
-            avatarUrl:
-              "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
-          },
-          {
-            id: "3",
-            name: "Priya K.",
-            role: "Event Coord.",
-            matchScore: 92,
-            avatarUrl:
-              "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80",
-          },
+        const [
+          eventsData,
+          crewData,
+          bookingsData,
+        ] = await Promise.all([
+          api.getEvents(),
+          api.getCrew(),
+          api.getBookings(),
         ]);
 
-        setUpcomingEvents([
-          {
-            id: "e1",
-            title: "Tech Summit 2024",
-            dateRange: "Oct 12 - 14, 2024",
-            crewedCount: 18,
-            totalCrewNeeded: 20,
-          },
-          {
-            id: "e2",
-            title: "Global Music Fest",
-            dateRange: "Nov 05, 2024",
-            crewedCount: 5,
-            totalCrewNeeded: 45,
-          },
-          {
-            id: "e3",
-            title: "Corporate Retreat",
-            dateRange: "Dec 01, 2024",
-            crewedCount: 0,
-            totalCrewNeeded: 12,
-          },
-        ]);
-      } catch (err) {
-        console.error("Error fetching dashboard data:", err);
+        setEvents(eventsData as Event[]);
+        setCrew(crewData as CrewMember[]);
+        setBookings(bookingsData as Booking[]);
+
+        // Recommendations require an event ID.
+        // They will be loaded from the recommendation
+        // workflow when the user selects an event.
+      } catch (error) {
+        console.error("Failed to load dashboard:", error);
       } finally {
         setLoading(false);
       }
     }
 
-    fetchDashboardData();
+    loadDashboard();
   }, []);
 
+  const recentEvents = events.slice(0, 5);
+
   return (
-    <div className="flex-1 flex flex-col font-sans">
-      {/* HEADER */}
-      <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0">
-        <div className="relative w-96">
-          <Search
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-            size={18}
-          />
-          <input
-            type="text"
-            placeholder="Search events, crew, or skills..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
-          />
+    <div className="min-h-full bg-[#f5f3ee]">
+      {/* Header */}
+      <header className="flex min-h-20 items-center justify-between border-b border-[#d8d4ca] bg-[#f5f3ee] px-6 lg:px-8">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#8a6420]">
+            Workspace
+          </p>
+
+          <h1 className="mt-1 text-xl font-semibold tracking-tight text-[#1c1c1c]">
+            Dashboard
+          </h1>
         </div>
 
-        <div className="flex items-center gap-4">
-          <button className="text-slate-500 hover:text-slate-700 p-2 rounded-full hover:bg-slate-100 transition-colors">
-            <Radio size={20} />
-          </button>
-          <div className="relative">
-            <button className="text-slate-500 hover:text-slate-700 p-2 rounded-full hover:bg-slate-100 transition-colors">
-              <Bell size={20} />
-            </button>
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
-          </div>
-          <div className="h-9 w-9 rounded-full overflow-hidden border border-slate-200 cursor-pointer ml-2">
-            <img
-              src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
-              alt="Profile"
-              className="h-full w-full object-cover"
-            />
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={() => setIsCreateEventOpen(true)}
+          className="flex items-center gap-2 bg-[#17212b] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#263746]"
+        >
+          <Plus size={17} />
+          Create event
+        </button>
       </header>
 
-      {/* DASHBOARD BODY */}
-      <div className="p-8 space-y-8">
-        {/* TITLE & ACTION */}
-        <div className="flex items-end justify-between">
-          <div>
-            <span className="text-xs font-bold tracking-wider text-blue-600 uppercase">
-              OVERVIEW
-            </span>
-            <h2 className="text-3xl font-bold text-slate-900 mt-1">
-              Organizer Dashboard
-            </h2>
+      {/* Content */}
+      <main className="px-6 py-8 lg:px-8">
+        {/* Overview */}
+        <section>
+          <div className="mb-5">
+            <p className="text-sm text-[#6b6962]">
+              A current view of your event and crew operations.
+            </p>
           </div>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2 shadow-md shadow-blue-600/20 transition-colors"
-          >
-            <Plus size={18} /> Create New Event
-          </button>
-        </div>
 
-        {/* STATS ROW */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-5">
-          <MetricCard
-            icon={<Calendar className="text-slate-600" size={20} />}
-            value={stats?.upcomingEventsCount}
-            label="Upcoming Events"
-          />
-          <MetricCard
-            icon={<PlayCircle className="text-blue-600" size={20} />}
-            value={stats?.activeEventsCount}
-            label="Active Events"
-          />
-          <MetricCard
-            icon={<UserPlus className="text-slate-600" size={20} />}
-            value={stats?.totalCrewBooked}
-            label="Total Crew Booked"
-          />
-          <MetricCard
-            icon={<ShieldCheck className="text-slate-600" size={20} />}
-            value={`${stats?.avgReliability ?? 0}%`}
-            label="Avg. Crew Reliability"
-          />
-          <div className="bg-blue-50/70 border border-blue-100 rounded-2xl p-5 flex flex-col justify-between relative">
-            <div className="flex items-center justify-between">
-              <PiggyBank className="text-blue-600" size={22} />
-              <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                {stats?.budgetSavedPercent}
-              </span>
-            </div>
-            <div className="mt-4">
-              <span className="text-3xl font-extrabold text-blue-700 block leading-tight">
-                {stats?.budgetSaved}
-              </span>
-              <span className="text-xs text-slate-500 font-medium">
-                Budget Saved
-              </span>
-            </div>
+          <div className="grid grid-cols-1 border border-[#d8d4ca] bg-[#eeece5] sm:grid-cols-2 lg:grid-cols-4">
+            <Metric
+              label="Events"
+              value={loading ? "—" : events.length}
+              icon={CalendarDays}
+            />
+
+            <Metric
+              label="Crew members"
+              value={loading ? "—" : crew.length}
+              icon={Users}
+            />
+
+            <Metric
+              label="Bookings"
+              value={loading ? "—" : bookings.length}
+              icon={ClipboardList}
+            />
+
+            <Metric
+              label="Recommendations"
+              value={recommendations.length || "—"}
+              icon={UserCheck}
+            />
           </div>
-        </div>
+        </section>
 
-        {/* TWO-COLUMN GRID */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* RECENT RECOMMENDATIONS (2 COLS) */}
-          <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2">
-                <Sparkles size={20} className="text-blue-600" />
-                <h3 className="text-lg font-bold text-slate-900">
-                  Recent Recommendations
-                </h3>
-              </div>
-              <button className="text-blue-600 hover:text-blue-700 text-sm font-semibold">
-                View All
+        {/* Events */}
+        <section className="mt-10">
+          <div className="mb-5 flex items-end justify-between">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#8a6420]">
+                Events
+              </p>
+
+              <h2 className="mt-1 text-lg font-semibold">
+                Recent events
+              </h2>
+            </div>
+
+            <Link
+              href="/events"
+              className="flex items-center gap-1 text-sm font-medium text-[#495d6b] hover:text-[#1c1c1c]"
+            >
+              View events
+              <ArrowUpRight size={15} />
+            </Link>
+          </div>
+
+          {loading ? (
+            <div className="border border-[#d8d4ca] bg-[#f8f6f0] p-8 text-sm text-[#6b6962]">
+              Loading events...
+            </div>
+          ) : recentEvents.length === 0 ? (
+            <div className="border border-[#d8d4ca] bg-[#f8f6f0] p-8">
+              <p className="font-medium">
+                No events yet.
+              </p>
+
+              <p className="mt-1 text-sm text-[#6b6962]">
+                Create your first event to start planning crew.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setIsCreateEventOpen(true)}
+                className="mt-5 border border-[#1c1c1c] px-4 py-2 text-sm font-medium hover:bg-[#1c1c1c] hover:text-white"
+              >
+                Create event
               </button>
             </div>
+          ) : (
+            <div className="border border-[#d8d4ca] bg-[#f8f6f0]">
+              {recentEvents.map((event, index) => {
+                const eventName =
+                  event.title ?? event.name ?? `Event ${event.id}`;
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {recommendations.map((item) => (
-                <div
-                  key={item.id}
-                  className="border border-slate-100 bg-slate-50/50 rounded-xl p-5 flex flex-col items-center text-center hover:shadow-md transition-shadow"
-                >
-                  <img
-                    src={item.avatarUrl}
-                    alt={item.name}
-                    className="w-16 h-16 rounded-full object-cover mb-3"
-                  />
-                  <h4 className="font-bold text-slate-900 text-base">
-                    {item.name}
-                  </h4>
-                  <p className="text-xs text-slate-500 mb-4">{item.role}</p>
-                  <span className="bg-blue-50 text-blue-600 text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1">
-                    <Zap size={12} className="fill-blue-600" />
-                    {item.matchScore}% Match
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+                return (
+                  <Link
+                    key={event.id}
+                    href={`/events/${event.id}`}
+                    className={[
+                      "flex items-center justify-between px-5 py-4 transition-colors hover:bg-[#eeece5]",
+                      index !== recentEvents.length - 1
+                        ? "border-b border-[#d8d4ca]"
+                        : "",
+                    ].join(" ")}
+                  >
+                    <div>
+                      <p className="text-sm font-medium">
+                        {eventName}
+                      </p>
 
-          {/* UPCOMING EVENTS (1 COL) */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-6">
-                <Calendar size={20} className="text-slate-700" />
-                <h3 className="text-lg font-bold text-slate-900">
-                  Upcoming Events
-                </h3>
-              </div>
-
-              <div className="space-y-3">
-                {upcomingEvents.map((event) => {
-                  const ratio = event.crewedCount / event.totalCrewNeeded;
-                  let badgeBg = "bg-blue-50 text-blue-700";
-                  if (ratio < 0.2 && event.totalCrewNeeded > 0)
-                    badgeBg = "bg-red-50 text-red-600";
-                  if (event.crewedCount === 0)
-                    badgeBg = "bg-slate-100 text-slate-600";
-
-                  return (
-                    <div
-                      key={event.id}
-                      className="p-4 border border-slate-100 bg-slate-50/40 rounded-xl flex items-center justify-between"
-                    >
-                      <div>
-                        <h4 className="font-bold text-slate-900 text-sm">
-                          {event.title}
-                        </h4>
-                        <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                          <Calendar size={12} />
-                          {event.dateRange}
+                      {event.startDate && (
+                        <p className="mt-1 font-mono text-xs text-[#77736a]">
+                          {formatDate(event.startDate)}
+                          {event.endDate
+                            ? ` — ${formatDate(event.endDate)}`
+                            : ""}
                         </p>
-                      </div>
-                      <span
-                        className={`text-xs font-semibold px-3 py-1 rounded-full ${badgeBg}`}
-                      >
-                        Crewed: {event.crewedCount}/{event.totalCrewNeeded}
-                      </span>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
+
+                    <ArrowUpRight
+                      size={16}
+                      className="text-[#77736a]"
+                    />
+                  </Link>
+                );
+              })}
             </div>
+          )}
+        </section>
 
-            <button className="w-full text-center text-blue-600 hover:text-blue-700 text-xs font-bold tracking-wider uppercase mt-6 py-2">
-              VIEW FULL SCHEDULE
-            </button>
+        {/* Recommendation entry point */}
+        <section className="mt-10 border border-[#bcb8ae] bg-[#17212b] p-6 text-white lg:p-8">
+          <div className="max-w-2xl">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#d9a441]">
+              Intelligent planning
+            </p>
+
+            <h2 className="mt-3 text-2xl font-semibold tracking-tight">
+              Find the right crew for an event.
+            </h2>
+
+            <p className="mt-3 text-sm leading-6 text-slate-300">
+              CrewPilot can evaluate event requirements, crew skills,
+              availability, bookings, and performance history to produce
+              a recommendation.
+            </p>
+
+            <Link
+              href="/recommendations"
+              className="mt-6 inline-flex items-center gap-2 border border-slate-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-white hover:text-[#17212b]"
+            >
+              Open recommendations
+              <ArrowUpRight size={15} />
+            </Link>
           </div>
-        </div>
-      </div>
+        </section>
+      </main>
 
-      {/* MODAL COMPONENT */}
       <CreateEventModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onFindOptimalCrew={(data) => console.log("Matching crews for:", data)}
+        isOpen={isCreateEventOpen}
+        onClose={() => setIsCreateEventOpen(false)}
+        onFindOptimalCrew={(data) => {
+          console.log("Event created:", data);
+          setIsCreateEventOpen(false);
+        }}
       />
     </div>
   );
 }
 
-function MetricCard({
-  icon,
-  value,
+function Metric({
   label,
+  value,
+  icon: Icon,
 }: {
-  icon: React.ReactNode;
-  value?: React.ReactNode;
   label: string;
+  value: number | string;
+  icon: typeof CalendarDays;
 }) {
   return (
-    <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
-      <div>{icon}</div>
-      <div className="mt-4">
-        <span className="text-3xl font-extrabold text-slate-900 block leading-tight">
-          {value ?? 0}
+    <div className="border-b border-[#d8d4ca] p-5 sm:border-r lg:border-b-0 last:border-r-0">
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-[#6b6962]">
+          {label}
         </span>
-        <span className="text-xs text-slate-500 font-medium">{label}</span>
+
+        <Icon
+          size={17}
+          strokeWidth={1.7}
+          className="text-[#77736a]"
+        />
       </div>
+
+      <p className="mt-6 font-mono text-3xl font-medium tracking-tight">
+        {value}
+      </p>
     </div>
   );
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
 }

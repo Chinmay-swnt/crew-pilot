@@ -1,531 +1,584 @@
 "use client";
 
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
-  Rocket,
-  Plus,
-  LayoutDashboard,
-  Calendar,
-  Users,
+  ArrowRight,
+  CheckCircle2,
+  RefreshCw,
   Sparkles,
-  FileText,
-  BarChart2,
-  Settings,
-  HelpCircle,
-  LogOut,
-  Bell,
-  Radio,
-  SlidersHorizontal,
-  RotateCcw,
-  MapPin,
-  Lightbulb,
-  ArrowDown,
+  Users,
 } from "lucide-react";
+import { api } from "@/lib/api";
+
+interface Event {
+  id: number;
+  title?: string;
+  name?: string;
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  location?: string;
+  status?: string;
+}
+
+interface RecommendedCrew {
+  id: number;
+  priority?: string;
+  individualScore?: number;
+  predictedReliability?: number;
+  estimatedCost?: number;
+  crewMember?: {
+    id: number;
+    name?: string;
+    firstName?: string;
+    lastName?: string;
+  };
+  role?: {
+    id: number;
+    name?: string;
+    title?: string;
+  };
+}
+
+interface Recommendation {
+  id: number;
+  overallScore?: number;
+  totalCost?: number;
+  predictedReliability?: number;
+  generatedAt?: string;
+  recommendedCrew?: RecommendedCrew[];
+}
 
 export default function RecommendationsPage() {
-  // Optimization Parameters State
-  const [budget, setBudget] = useState(100000);
-  const [reliabilityPriority, setReliabilityPriority] = useState(2); // 0: Low, 1: Med, 2: High
-  const [qualityPriority, setQualityPriority] = useState(1);
-  const [distancePriority, setDistancePriority] = useState(2);
-  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
+  const [recommendations, setRecommendations] = useState<
+    Recommendation[]
+  >([]);
 
-  const priorityLabels = ["Low", "Med", "High"];
+  const [loadingEvents, setLoadingEvents] = useState(true);
+  const [loadingRecommendations, setLoadingRecommendations] =
+    useState(false);
+  const [generating, setGenerating] = useState(false);
 
-  const handleReset = () => {
-    setBudget(100000);
-    setReliabilityPriority(2);
-    setQualityPriority(1);
-    setDistancePriority(2);
-  };
+  const [error, setError] = useState<string | null>(null);
 
-  const handleOptimize = () => {
-    setIsOptimizing(true);
-    // CONNECT TO BACKEND / AI ENGINE HERE
-    setTimeout(() => setIsOptimizing(false), 800);
-  };
+  useEffect(() => {
+    loadEvents();
+  }, []);
+
+  useEffect(() => {
+    if (selectedEventId !== null) {
+      loadRecommendations(selectedEventId);
+    }
+  }, [selectedEventId]);
+
+  async function loadEvents() {
+    try {
+      setLoadingEvents(true);
+      setError(null);
+
+      const data = (await api.getEvents()) as Event[];
+
+      setEvents(data);
+
+      if (data.length > 0) {
+        setSelectedEventId(data[0].id);
+      }
+    } catch (err) {
+      console.error("Failed to load events:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load events."
+      );
+    } finally {
+      setLoadingEvents(false);
+    }
+  }
+
+  async function loadRecommendations(eventId: number) {
+    try {
+      setLoadingRecommendations(true);
+      setError(null);
+
+      const data = (await api.getRecommendations(
+        eventId
+      )) as Recommendation[];
+
+      setRecommendations(data);
+    } catch (err) {
+      console.error("Failed to load recommendations:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load recommendations."
+      );
+    } finally {
+      setLoadingRecommendations(false);
+    }
+  }
+
+  async function generateRecommendations() {
+    if (selectedEventId === null) return;
+
+    try {
+      setGenerating(true);
+      setError(null);
+
+      const data = (await api.generateRecommendations(
+        selectedEventId
+      )) as Recommendation[];
+
+      setRecommendations(data);
+    } catch (err) {
+      console.error("Failed to generate recommendations:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to generate recommendations."
+      );
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  const selectedEvent = events.find(
+    (event) => event.id === selectedEventId
+  );
+
+  const latestRecommendation =
+    recommendations.length > 0
+      ? recommendations[recommendations.length - 1]
+      : null;
+
+  const recommendedCrew =
+    latestRecommendation?.recommendedCrew ?? [];
 
   return (
-    <div className="flex h-screen w-full bg-[#F8FAFC] font-sans">
-      {/* SIDEBAR */}
-      <aside className="w-64 bg-[#0B132B] text-slate-400 flex flex-col justify-between shrink-0">
+    <div className="min-h-full bg-[#f5f3ee]">
+      {/* Header */}
+      <header className="flex min-h-20 items-center justify-between border-b border-[#d8d4ca] px-6 lg:px-8">
         <div>
-          <div className="h-20 flex items-center px-6 gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg">
-              <Rocket size={20} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-white font-bold text-xl leading-tight">
-                CrewPilot
-              </h1>
-              <p className="text-xs text-slate-400">AI Staffing Hub</p>
-            </div>
-          </div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#8a6420]">
+            Staffing intelligence
+          </p>
 
-          <div className="px-3 mb-2">
-            <button className="w-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-colors shadow-md">
-              <Plus size={18} />
-              Create Event
-            </button>
-          </div>
+          <h1 className="mt-1 text-xl font-semibold tracking-tight">
+            Recommendations
+          </h1>
+        </div>
 
-          <nav className="flex flex-col gap-1 px-3 mt-4">
-            <NavItem icon={<LayoutDashboard size={18} />} label="Dashboard" />
-            <NavItem icon={<Calendar size={18} />} label="Events" />
-            <NavItem icon={<Users size={18} />} label="Crew" />
-            <NavItem
-              icon={<Sparkles size={18} />}
-              label="Recommendations"
-              isActive
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedEventId !== null) {
+                loadRecommendations(selectedEventId);
+              }
+            }}
+            disabled={
+              selectedEventId === null ||
+              loadingRecommendations ||
+              generating
+            }
+            className="flex items-center gap-2 border border-[#bcb8ae] px-3 py-2 text-sm font-medium transition-colors hover:border-[#17212b] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw
+              size={15}
+              className={
+                loadingRecommendations ? "animate-spin" : ""
+              }
             />
-            <NavItem icon={<FileText size={18} />} label="Bookings" />
-            <NavItem icon={<BarChart2 size={18} />} label="Analytics" />
-            <NavItem icon={<Settings size={18} />} label="Settings" />
-          </nav>
-        </div>
-
-        <div className="px-3 pb-6 flex flex-col gap-1 border-t border-slate-800/80 pt-4">
-          <NavItem icon={<HelpCircle size={18} />} label="Support" />
-          <NavItem icon={<LogOut size={18} />} label="Logout" />
-        </div>
-      </aside>
-
-      {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* HEADER */}
-        <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-end px-8 gap-4 shrink-0">
-          <div className="relative">
-            <button className="text-slate-500 hover:text-slate-700 p-2 rounded-full hover:bg-slate-100 transition-colors">
-              <Bell size={20} />
-            </button>
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
-          </div>
-          <button className="text-slate-500 hover:text-slate-700 p-2 rounded-full hover:bg-slate-100 transition-colors">
-            <Radio size={20} />
+            Refresh
           </button>
-          <div className="h-9 w-9 rounded-full overflow-hidden border border-slate-200 cursor-pointer ml-2">
-            <img
-              src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
-              alt="User Profile"
-              className="h-full w-full object-cover"
-            />
-          </div>
-        </header>
 
-        {/* PAGE BODY */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-6">
-          {/* TITLE & EVENT INFO */}
-          <div className="flex items-start justify-between">
+          <button
+            type="button"
+            onClick={generateRecommendations}
+            disabled={
+              selectedEventId === null ||
+              generating ||
+              loadingRecommendations
+            }
+            className="flex items-center gap-2 bg-[#17212b] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#293b49] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Sparkles
+              size={16}
+              className={generating ? "animate-pulse" : ""}
+            />
+
+            {generating
+              ? "Generating..."
+              : "Generate recommendations"}
+          </button>
+        </div>
+      </header>
+
+      <main className="px-6 py-8 lg:px-8">
+        {/* Event selector */}
+        <section className="border border-[#d8d4ca] bg-[#eeece5]">
+          <div className="flex flex-col gap-5 px-6 py-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-                What–If Optimization
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#77736a]">
+                Event
+              </p>
+
+              <h2 className="mt-2 text-lg font-semibold">
+                Select an event
               </h2>
-              <p className="text-slate-500 text-sm mt-1">
-                Fine-tune the AI recommendation parameters to balance cost,
-                quality, and logistics.
+
+              <p className="mt-1 max-w-xl text-sm leading-6 text-[#6b6962]">
+                Recommendations are generated against the requirements
+                attached to the selected event.
               </p>
             </div>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg">
-              <MapPin size={14} className="text-slate-500" />
-              <span>Event: Global Tech Summit 2024</span>
+
+            <div className="w-full lg:w-80">
+              {loadingEvents ? (
+                <div className="border border-[#cfcac0] bg-[#f8f6f0] px-4 py-3 text-sm text-[#77736a]">
+                  Loading events...
+                </div>
+              ) : events.length === 0 ? (
+                <Link
+                  href="/events/create"
+                  className="flex items-center justify-between border border-[#cfcac0] bg-[#f8f6f0] px-4 py-3 text-sm font-medium hover:border-[#17212b]"
+                >
+                  Create your first event
+                  <ArrowRight size={16} />
+                </Link>
+              ) : (
+                <select
+                  value={selectedEventId ?? ""}
+                  onChange={(event) =>
+                    setSelectedEventId(
+                      Number(event.target.value)
+                    )
+                  }
+                  className="w-full border border-[#cfcac0] bg-[#f8f6f0] px-4 py-3 text-sm outline-none focus:border-[#17212b]"
+                >
+                  {events.map((event) => (
+                    <option key={event.id} value={event.id}>
+                      {event.title ??
+                        event.name ??
+                        `Event ${event.id}`}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 
-          {/* MAIN TWO-COLUMN GRID */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* LEFT COLUMN: OPTIMIZATION PARAMETERS */}
-            <div className="lg:col-span-5 bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-8">
-                  <div className="flex items-center gap-2.5">
-                    <SlidersHorizontal size={20} className="text-blue-600" />
-                    <h3 className="text-lg font-bold text-slate-900">
-                      Optimization Parameters
-                    </h3>
-                  </div>
-                  <button
-                    onClick={handleReset}
-                    className="text-slate-400 hover:text-slate-600 transition-colors p-1"
-                    title="Reset Parameters"
-                  >
-                    <RotateCcw size={18} />
-                  </button>
-                </div>
+          {selectedEvent && (
+            <div className="border-t border-[#d8d4ca] px-6 py-4">
+              <div className="flex flex-wrap gap-x-6 gap-y-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[#77736a]">
+                {selectedEvent.startDate && (
+                  <span>
+                    {formatDate(selectedEvent.startDate)}
+                  </span>
+                )}
 
-                <div className="space-y-7">
-                  {/* SLIDER 1: MAXIMUM BUDGET */}
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                        Maximum Budget
-                      </label>
-                      <span className="text-xl font-extrabold text-blue-600">
-                        ₹{budget.toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min={50000}
-                      max={150000}
-                      step={5000}
-                      value={budget}
-                      onChange={(e) => setBudget(Number(e.target.value))}
-                      className="w-full accent-blue-600 h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer"
-                    />
-                    <div className="flex justify-between text-xs font-semibold text-slate-400 mt-1">
-                      <span>₹50K</span>
-                      <span>₹150K</span>
-                    </div>
-                  </div>
+                {selectedEvent.location && (
+                  <span>{selectedEvent.location}</span>
+                )}
 
-                  {/* SLIDER 2: RELIABILITY PRIORITY */}
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-wider">
-                        <span>Reliability Priority</span>
-                      </div>
-                      <span className="text-sm font-bold text-slate-800">
-                        {priorityLabels[reliabilityPriority]}
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={2}
-                      step={1}
-                      value={reliabilityPriority}
-                      onChange={(e) =>
-                        setReliabilityPriority(Number(e.target.value))
-                      }
-                      className="w-full accent-blue-600 h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer"
-                    />
-                    <div className="flex justify-between text-xs font-semibold text-slate-400 mt-1">
-                      <span>Low</span>
-                      <span>Med</span>
-                      <span>High</span>
-                    </div>
-                  </div>
-
-                  {/* SLIDER 3: QUALITY PRIORITY */}
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-wider">
-                        <span>Quality Priority</span>
-                      </div>
-                      <span className="text-sm font-bold text-slate-800">
-                        {priorityLabels[qualityPriority]}
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={2}
-                      step={1}
-                      value={qualityPriority}
-                      onChange={(e) =>
-                        setQualityPriority(Number(e.target.value))
-                      }
-                      className="w-full accent-blue-600 h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer"
-                    />
-                    <div className="flex justify-between text-xs font-semibold text-slate-400 mt-1">
-                      <span>Low</span>
-                      <span>Med</span>
-                      <span>High</span>
-                    </div>
-                  </div>
-
-                  {/* SLIDER 4: DISTANCE PRIORITY */}
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-wider">
-                        <span>Distance Priority</span>
-                      </div>
-                      <span className="text-sm font-bold text-slate-800">
-                        {priorityLabels[distancePriority]}
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={2}
-                      step={1}
-                      value={distancePriority}
-                      onChange={(e) =>
-                        setDistancePriority(Number(e.target.value))
-                      }
-                      className="w-full accent-blue-600 h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer"
-                    />
-                    <div className="flex justify-between text-xs font-semibold text-slate-400 mt-1">
-                      <span>Low</span>
-                      <span>Med</span>
-                      <span>High</span>
-                    </div>
-                  </div>
-                </div>
+                {selectedEvent.status && (
+                  <span>{selectedEvent.status}</span>
+                )}
               </div>
+            </div>
+          )}
+        </section>
+
+        {/* Error */}
+        {error && (
+          <div className="mt-6 border border-[#c9a6a0] bg-[#f5e9e6] p-5">
+            <p className="font-medium text-[#6d332b]">
+              Something went wrong
+            </p>
+
+            <p className="mt-1 text-sm text-[#7d514a]">
+              {error}
+            </p>
+          </div>
+        )}
+
+        {/* Loading */}
+        {loadingRecommendations && (
+          <div className="mt-6 border border-[#d8d4ca] bg-[#f8f6f0] p-8">
+            <p className="font-mono text-xs uppercase tracking-[0.12em] text-[#77736a]">
+              Loading recommendations...
+            </p>
+          </div>
+        )}
+
+        {/* No recommendations */}
+        {!loadingRecommendations &&
+          selectedEvent &&
+          recommendations.length === 0 && (
+            <section className="mt-6 border border-[#d8d4ca] bg-[#f8f6f0] p-10">
+              <div className="flex h-10 w-10 items-center justify-center bg-[#17212b] text-[#d9a441]">
+                <Sparkles size={18} />
+              </div>
+
+              <h2 className="mt-5 text-lg font-semibold">
+                No recommendations yet
+              </h2>
+
+              <p className="mt-2 max-w-xl text-sm leading-6 text-[#6b6962]">
+                Generate recommendations for this event after its
+                staffing requirements have been created.
+              </p>
 
               <button
-                onClick={handleOptimize}
-                disabled={isOptimizing}
-                className="w-full mt-8 bg-blue-700 hover:bg-blue-800 text-white font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-md shadow-blue-600/20 transition-all disabled:opacity-50"
+                type="button"
+                onClick={generateRecommendations}
+                disabled={generating}
+                className="mt-6 inline-flex items-center gap-2 bg-[#17212b] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#293b49] disabled:opacity-50"
               >
-                <RotateCcw
-                  size={18}
-                  className={isOptimizing ? "animate-spin" : ""}
-                />
-                {isOptimizing ? "Optimizing..." : "Re-Optimize Team"}
+                <Sparkles size={16} />
+                {generating
+                  ? "Generating..."
+                  : "Generate recommendations"}
               </button>
-            </div>
+            </section>
+          )}
 
-            {/* RIGHT COLUMN: IMPACT ANALYSIS & VISUALIZATION */}
-            <div className="lg:col-span-7 space-y-6">
-              {/* IMPACT ANALYSIS CARD */}
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm">
-                <div className="flex items-center gap-2 mb-5">
-                  <BarChart2 size={20} className="text-blue-600" />
-                  <h3 className="text-lg font-bold text-slate-900">
-                    Impact Analysis
-                  </h3>
-                </div>
+        {/* Recommendation */}
+        {!loadingRecommendations &&
+          latestRecommendation && (
+            <section className="mt-6">
+              {/* Summary */}
+              <div className="grid grid-cols-1 gap-px border border-[#d8d4ca] bg-[#d8d4ca] sm:grid-cols-2 lg:grid-cols-4">
+                <Metric
+                  label="Overall score"
+                  value={formatNumber(
+                    latestRecommendation.overallScore
+                  )}
+                />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
-                  {/* BEFORE CARD */}
-                  <div className="bg-slate-50/80 border border-slate-200/70 rounded-xl p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-                      <span className="text-xs font-bold text-slate-600">
-                        Current Plan (Before)
-                      </span>
-                    </div>
-                    <div className="flex items-baseline justify-between">
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                          Match Score
-                        </span>
-                        <span className="text-2xl font-extrabold text-slate-800">
-                          94%
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                          Est. Cost
-                        </span>
-                        <span className="text-2xl font-extrabold text-slate-800">
-                          ₹86,500
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                <Metric
+                  label="Predicted reliability"
+                  value={formatNumber(
+                    latestRecommendation.predictedReliability
+                  )}
+                />
 
-                  {/* AFTER CARD */}
-                  <div className="bg-blue-50/40 border border-blue-200/80 rounded-xl p-4 relative">
-                    <span className="absolute -top-2.5 right-3 bg-blue-600 text-white text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md shadow-sm">
-                      PROJECTED
-                    </span>
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="w-2 h-2 rounded-full bg-blue-600"></span>
-                      <span className="text-xs font-bold text-blue-900">
-                        New Scenario (After)
-                      </span>
-                    </div>
-                    <div className="flex items-baseline justify-between">
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                          Match Score
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <span className="text-2xl font-extrabold text-slate-900">
-                            89%
-                          </span>
-                          <ArrowDown size={14} className="text-slate-500" />
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                          Est. Cost
-                        </span>
-                        <div className="flex items-center justify-end gap-1">
-                          <span className="text-2xl font-extrabold text-blue-700">
-                            ₹69,500
-                          </span>
-                          <ArrowDown size={14} className="text-emerald-600" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <Metric
+                  label="Estimated total cost"
+                  value={formatCurrency(
+                    latestRecommendation.totalCost
+                  )}
+                />
 
-                {/* INSIGHT BANNER */}
-                <div className="bg-purple-50/50 border-l-4 border-purple-600 rounded-xl p-4 border border-purple-100/80 flex items-start gap-3">
-                  <div className="bg-purple-100 text-purple-700 p-1.5 rounded-lg shrink-0 mt-0.5">
-                    <Lightbulb size={18} />
-                  </div>
-                  <p className="text-xs text-slate-700 leading-relaxed font-medium">
-                    <strong className="text-purple-900 font-bold">
-                      ₹17,000 saved
-                    </strong>{" "}
-                    by replacing two higher-cost candidates with qualified
-                    nearby alternatives. Distance priority settings
-                    significantly reduced travel stipends.
-                  </p>
-                </div>
+                <Metric
+                  label="Generated"
+                  value={
+                    latestRecommendation.generatedAt
+                      ? formatDateTime(
+                          latestRecommendation.generatedAt
+                        )
+                      : "—"
+                  }
+                />
               </div>
 
-              {/* RADAR / TRADE-OFF VISUALIZATION */}
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm">
-                <h3 className="text-lg font-bold text-slate-900 mb-4">
-                  Trade-off Visualization
-                </h3>
+              {/* Crew */}
+              <div className="mt-6 border border-[#d8d4ca] bg-[#f8f6f0]">
+                <div className="flex items-center justify-between border-b border-[#d8d4ca] px-5 py-4">
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#77736a]">
+                      Recommended crew
+                    </p>
 
-                <div className="relative w-full h-64 flex items-center justify-center border border-slate-100 bg-slate-50/30 rounded-xl p-4">
-                  {/* SVG RADAR SPIDER CHART */}
-                  <svg
-                    className="w-full h-full max-w-sm max-h-56"
-                    viewBox="0 0 300 240"
-                  >
-                    {/* Grid Background Rings */}
-                    <polygon
-                      points="150,20 250,120 150,220 50,120"
-                      fill="none"
-                      stroke="#E2E8F0"
-                      strokeWidth="1"
-                    />
-                    <polygon
-                      points="150,50 215,120 150,190 85,120"
-                      fill="none"
-                      stroke="#E2E8F0"
-                      strokeWidth="1"
-                    />
-                    <polygon
-                      points="150,80 180,120 150,160 120,120"
-                      fill="none"
-                      stroke="#E2E8F0"
-                      strokeWidth="1"
-                    />
-
-                    {/* Axis Lines */}
-                    <line
-                      x1="150"
-                      y1="20"
-                      x2="150"
-                      y2="220"
-                      stroke="#CBD5E1"
-                      strokeWidth="1"
-                      strokeDasharray="2,2"
-                    />
-                    <line
-                      x1="50"
-                      y1="120"
-                      x2="250"
-                      y2="120"
-                      stroke="#CBD5E1"
-                      strokeWidth="1"
-                      strokeDasharray="2,2"
-                    />
-
-                    {/* Axis Labels */}
-                    <text
-                      x="150"
-                      y="12"
-                      fill="#64748B"
-                      fontSize="10"
-                      textAnchor="middle"
-                      fontWeight="bold"
-                    >
-                      Quality
-                    </text>
-                    <text
-                      x="258"
-                      y="123"
-                      fill="#64748B"
-                      fontSize="10"
-                      textAnchor="start"
-                      fontWeight="bold"
-                    >
-                      Cost Savings
-                    </text>
-                    <text
-                      x="150"
-                      y="235"
-                      fill="#64748B"
-                      fontSize="10"
-                      textAnchor="middle"
-                      fontWeight="bold"
-                    >
-                      Distance
-                    </text>
-                    <text
-                      x="42"
-                      y="123"
-                      fill="#64748B"
-                      fontSize="10"
-                      textAnchor="end"
-                      fontWeight="bold"
-                    >
-                      Reliability
-                    </text>
-
-                    {/* Current Plan Polygon (Dashed Line) */}
-                    <polygon
-                      points="150,35 220,120 150,180 75,120"
-                      fill="none"
-                      stroke="#94A3B8"
-                      strokeWidth="2"
-                      strokeDasharray="4,4"
-                    />
-
-                    {/* Projected Plan Polygon (Solid Fill & Border) */}
-                    <polygon
-                      points="150,60 240,120 150,200 90,120"
-                      fill="rgba(37, 99, 235, 0.2)"
-                      stroke="#2563EB"
-                      strokeWidth="2.5"
-                    />
-                  </svg>
-
-                  {/* LEGEND */}
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-6 text-xs font-semibold text-slate-600 bg-white px-4 py-1.5 rounded-full border border-slate-200/80 shadow-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="w-4 h-0 border-t-2 border-dashed border-slate-400"></span>
-                      <span>Current Plan</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-4 h-0 border-t-2 border-blue-600"></span>
-                      <span className="text-blue-900 font-bold">
-                        Projected Plan
-                      </span>
-                    </div>
+                    <h2 className="mt-1 text-lg font-semibold">
+                      Candidate matches
+                    </h2>
                   </div>
+
+                  <span className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[#77736a]">
+                    <Users size={14} />
+                    {recommendedCrew.length}
+                  </span>
                 </div>
+
+                {recommendedCrew.length === 0 ? (
+                  <div className="px-5 py-10">
+                    <p className="text-sm font-medium">
+                      No crew candidates have been attached yet.
+                    </p>
+
+                    <p className="mt-2 max-w-xl text-sm leading-6 text-[#6b6962]">
+                      The current Spring Boot recommendation engine
+                      creates the recommendation record, but it does
+                      not yet populate the recommended crew list.
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    {recommendedCrew.map(
+                      (candidate, index) => (
+                        <CrewRow
+                          key={candidate.id}
+                          candidate={candidate}
+                          last={
+                            index ===
+                            recommendedCrew.length - 1
+                          }
+                        />
+                      )
+                    )}
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
-        </div>
+            </section>
+          )}
       </main>
     </div>
   );
 }
 
-function NavItem({
-  icon,
+function Metric({
   label,
-  isActive = false,
+  value,
 }: {
-  icon: React.ReactNode;
   label: string;
-  isActive?: boolean;
+  value: string;
 }) {
   return (
-    <a
-      href="#"
-      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-        isActive
-          ? "bg-slate-800 text-white font-medium shadow-sm border-l-2 border-blue-500"
-          : "hover:bg-slate-800/50 hover:text-slate-300"
-      }`}
-    >
-      {icon}
-      <span className="text-sm">{label}</span>
-    </a>
+    <div className="bg-[#f8f6f0] px-5 py-5">
+      <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#77736a]">
+        {label}
+      </p>
+
+      <p className="mt-3 text-xl font-semibold tracking-tight">
+        {value}
+      </p>
+    </div>
   );
+}
+
+function CrewRow({
+  candidate,
+  last,
+}: {
+  candidate: RecommendedCrew;
+  last: boolean;
+}) {
+  const crewName =
+    candidate.crewMember?.name ??
+    [
+      candidate.crewMember?.firstName,
+      candidate.crewMember?.lastName,
+    ]
+      .filter(Boolean)
+      .join(" ") ??
+    `Crew member ${candidate.crewMember?.id ?? ""}`;
+
+  const roleName =
+    candidate.role?.name ??
+    candidate.role?.title ??
+    "Role not specified";
+
+  return (
+    <div
+      className={[
+        "grid grid-cols-[1fr_auto_auto] items-center gap-5 px-5 py-5",
+        !last ? "border-b border-[#d8d4ca]" : "",
+      ].join(" ")}
+    >
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <CheckCircle2
+            size={15}
+            className="shrink-0 text-[#667b61]"
+          />
+
+          <h3 className="truncate text-sm font-semibold">
+            {crewName}
+          </h3>
+        </div>
+
+        <p className="mt-1 text-xs text-[#6b6962]">
+          {roleName}
+        </p>
+      </div>
+
+      <div className="text-right">
+        <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#77736a]">
+          Score
+        </p>
+
+        <p className="mt-1 text-sm font-semibold">
+          {formatNumber(candidate.individualScore)}
+        </p>
+      </div>
+
+      <div className="text-right">
+        <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#77736a]">
+          Cost
+        </p>
+
+        <p className="mt-1 text-sm font-semibold">
+          {formatCurrency(candidate.estimatedCost)}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function formatNumber(value?: number) {
+  if (value === undefined || value === null) {
+    return "—";
+  }
+
+  return new Intl.NumberFormat("en-IN", {
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatCurrency(value?: number) {
+  if (value === undefined || value === null) {
+    return "—";
+  }
+
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }

@@ -1,5 +1,6 @@
 package com.crewpilot.backend.controller;
 
+import com.crewpilot.backend.dto.EventResponse;
 import com.crewpilot.backend.entity.Event;
 import com.crewpilot.backend.entity.EventRequirement;
 import com.crewpilot.backend.service.EventService;
@@ -7,6 +8,7 @@ import com.crewpilot.backend.service.RequirementService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import com.crewpilot.backend.dto.EventRequirementResponse;
 
 import java.util.List;
 
@@ -19,18 +21,19 @@ public class EventController {
   private final EventService eventService;
   private final RequirementService requirementService;
 
-  // =========================
-  // EVENT CRUD
-  // =========================
-
   @GetMapping
-  public List<Event> getAllEvents() {
-    return eventService.getAllEvents();
+  public List<EventResponse> getAllEvents() {
+    return eventService.getAllEvents()
+      .stream()
+      .map(this::toResponse)
+      .toList();
   }
 
   @GetMapping("/{id}")
-  public Event getEvent(@PathVariable Long id) {
-    return eventService.getEventById(id);
+  public EventResponse getEvent(@PathVariable Long id) {
+    return toResponse(
+      eventService.getEventById(id)
+    );
   }
 
   @PostMapping
@@ -53,15 +56,14 @@ public class EventController {
     eventService.deleteEvent(id);
   }
 
-  // =========================
-  // EVENT REQUIREMENTS
-  // =========================
-
   @GetMapping("/{eventId}/requirements")
-  public List<EventRequirement> getRequirements(
+  public List<EventRequirementResponse> getRequirements(
     @PathVariable Long eventId
   ) {
-    return requirementService.getRequirementsForEvent(eventId);
+    return requirementService.getRequirementsForEvent(eventId)
+      .stream()
+      .map(this::toRequirementResponse)
+      .toList();
   }
 
   @PostMapping("/{eventId}/requirements")
@@ -96,4 +98,53 @@ public class EventController {
   ) {
     requirementService.deleteRequirement(requirementId);
   }
+
+  private EventResponse toResponse(Event event) {
+    return new EventResponse(
+      event.getId(),
+      event.getOrganizer() != null
+        ? event.getOrganizer().getId()
+        : null,
+      event.getName(),
+      event.getEventType(),
+      event.getDescription(),
+      event.getDate(),
+      event.getStartTime(),
+      event.getEndTime(),
+      event.getLocation(),
+      event.getLatitude(),
+      event.getLongitude(),
+      event.getGuestCount(),
+      event.getBudget(),
+      event.getStatus(),
+      event.getVersion(),
+      event.getCreatedAt(),
+      event.getUpdatedAt()
+    );
+  }
+
+  private EventRequirementResponse toRequirementResponse(
+    EventRequirement requirement
+  ) {
+    return new EventRequirementResponse(
+      requirement.getId(),
+      requirement.getEvent() != null
+        ? requirement.getEvent().getId()
+        : null,
+      requirement.getRole() != null
+        ? requirement.getRole().getId()
+        : null,
+      requirement.getRole() != null
+        ? requirement.getRole().getName()
+        : null,
+      requirement.getQuantity(),
+      requirement.getRequiredExperience(),
+      requirement.getRequiredSkills()
+        .stream()
+        .map(skill -> skill.getSkill().getId())
+        .toList()
+    );
+  }
 }
+
+

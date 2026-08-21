@@ -10,7 +10,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -20,25 +19,38 @@ public class RecommendationEngine {
   private final EventRepository eventRepository;
   private final EventRequirementRepository eventRequirementRepository;
   private final RecommendationRepository recommendationRepository;
+  private final TeamOptimizationService teamOptimizationService;
 
-  public List<Recommendation> getRecommendationsForEvent(Long eventId) {
+  public List<Recommendation> getRecommendationsForEvent(
+    Long eventId
+  ) {
 
     if (!eventRepository.existsById(eventId)) {
-      throw new RuntimeException("Event not found: " + eventId);
+      throw new RuntimeException(
+        "Event not found: " + eventId
+      );
     }
 
-    return recommendationRepository.findByEventId(eventId);
+    return recommendationRepository
+      .findByEventId(eventId);
   }
 
   @Transactional
-  public List<Recommendation> generateRecommendations(Long eventId) {
+  public List<Recommendation> generateRecommendations(
+    Long eventId
+  ) {
 
-    Event event = eventRepository.findById(eventId)
-      .orElseThrow(() ->
-        new RuntimeException("Event not found: " + eventId));
+    Event event =
+      eventRepository.findById(eventId)
+        .orElseThrow(() ->
+          new RuntimeException(
+            "Event not found: " + eventId
+          )
+        );
 
     List<EventRequirement> requirements =
-      eventRequirementRepository.findByEventId(eventId);
+      eventRequirementRepository
+        .findByEventId(eventId);
 
     if (requirements.isEmpty()) {
       throw new RuntimeException(
@@ -46,33 +58,16 @@ public class RecommendationEngine {
       );
     }
 
-    /*
-     * XGBoost integration point.
-     *
-     * Build the feature vector from:
-     * - event
-     * - event requirements
-     * - crew members
-     * - crew skills
-     * - availability
-     * - performance history
-     *
-     * Then pass those features to your XGBoost model.
-     *
-     * The model should return predictions such as:
-     * - individual score
-     * - predicted reliability
-     * - estimated suitability
-     *
-     * DO NOT put the ML scoring formula here.
-     */
+    Recommendation recommendation =
+      teamOptimizationService.optimize(
+        event,
+        requirements
+      );
 
-    Recommendation recommendation = Recommendation.builder()
-      .event(event)
-      .generatedAt(LocalDateTime.now())
-      .build();
-
-    recommendation = recommendationRepository.save(recommendation);
+    recommendation =
+      recommendationRepository.save(
+        recommendation
+      );
 
     return List.of(recommendation);
   }

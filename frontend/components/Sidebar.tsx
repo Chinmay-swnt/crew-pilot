@@ -1,113 +1,124 @@
 "use client";
 
-import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Rocket,
-  Plus,
   LayoutDashboard,
-  Calendar,
+  CalendarDays,
   Users,
-  Sparkles,
-  FileText,
-  BarChart2,
-  Settings,
-  HelpCircle,
+  ClipboardList,
+  UserCheck,
+  BriefcaseBusiness,
+  Wrench,
   LogOut,
 } from "lucide-react";
 
-interface SidebarProps {
-  onCreateEvent?: () => void;
-}
-
 const NAV_ITEMS = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Events", href: "/events", icon: Calendar },
-  { label: "Crew", href: "/crew", icon: Users },
-  { label: "Recommendations", href: "/recommendations", icon: Sparkles },
-  { label: "Bookings", href: "/bookings", icon: FileText },
-  { label: "Analytics", href: "/analytics", icon: BarChart2 },
-  { label: "Settings", href: "/settings", icon: Settings },
+  {
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+  },
+  {
+    label: "Events",
+    href: "/events",
+    icon: CalendarDays,
+  },
+  {
+    label: "Crew",
+    href: "/crew",
+    icon: Users,
+  },
+  {
+    label: "Bookings",
+    href: "/bookings",
+    icon: ClipboardList,
+  },
+  {
+    label: "Recommendations",
+    href: "/recommendations",
+    icon: UserCheck,
+  },
+  {
+    label: "Roles",
+    href: "/roles",
+    icon: BriefcaseBusiness,
+  },
+  {
+    label: "Skills",
+    href: "/skills",
+    icon: Wrench,
+  },
 ];
 
-export default function Sidebar({ onCreateEvent }: SidebarProps) {
+export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 bg-[#0B132B] text-slate-400 flex flex-col justify-between shrink-0 h-screen sticky top-0">
-      <div>
-        {/* LOGO */}
-        <div className="h-20 flex items-center px-6 gap-3">
-          <div className="bg-blue-600 p-2 rounded-lg">
-            <Rocket size={20} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-white font-bold text-xl leading-tight">
-              CrewPilot
-            </h1>
-            <p className="text-xs text-slate-400">AI Staffing Hub</p>
-          </div>
+    <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-[#17212b] text-slate-300">
+      {/* Brand */}
+      <div className="flex h-20 items-center gap-3 border-b border-slate-700/70 px-6">
+        <div className="flex h-9 w-9 items-center justify-center bg-[#d9a441] text-[#17212b]">
+          <Rocket size={19} strokeWidth={2} />
         </div>
 
-        {/* DYNAMIC NAV LINKS */}
-        <nav className="flex flex-col gap-1 px-3 mt-4">
+        <div>
+          <h1 className="text-lg font-semibold tracking-tight text-white">
+            CrewPilot
+          </h1>
+
+          <p className="text-xs text-slate-400">
+            Crew operations
+          </p>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-5">
+        <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+          Workspace
+        </p>
+
+        <div className="flex flex-col gap-1">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
-            // Checks if current path matches item route
-            const isActive = pathname === item.href;
+
+            const isActive =
+              pathname === item.href ||
+              pathname.startsWith(`${item.href}/`);
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                className={[
+                  "flex items-center gap-3 px-3 py-2.5 text-sm transition-colors",
                   isActive
-                    ? "bg-slate-800 text-white font-medium shadow-sm border-l-2 border-blue-500"
-                    : "hover:bg-slate-800/50 hover:text-slate-300"
-                }`}
+                    ? "bg-slate-700 text-white"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200",
+                ].join(" ")}
               >
-                <Icon size={18} />
-                <span className="text-sm">{item.label}</span>
+                <Icon size={17} strokeWidth={1.8} />
+
+                <span>{item.label}</span>
               </Link>
             );
           })}
-        </nav>
-      </div>
-
-      {/* BOTTOM ACTIONS */}
-      <div className="px-3 pb-6 flex flex-col gap-4">
-        {onCreateEvent && (
-          <button
-            onClick={onCreateEvent}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-blue-600/30"
-          >
-            <Plus size={18} />
-            Create Event
-          </button>
-        )}
-
-        <div className="border-t border-slate-800/80 pt-3 flex flex-col gap-1">
-          <Link
-            href="/support"
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              pathname === "/support"
-                ? "bg-slate-800 text-white font-medium"
-                : "hover:bg-slate-800/50 hover:text-slate-300"
-            }`}
-          >
-            <HelpCircle size={18} />
-            <span className="text-sm">Support</span>
-          </Link>
-
-          <button
-            onClick={() => console.log("Logout triggered")}
-            className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800/50 hover:text-slate-300 transition-colors w-full text-left"
-          >
-            <LogOut size={18} />
-            <span className="text-sm">Logout</span>
-          </button>
         </div>
+      </nav>
+
+      {/* Bottom */}
+      <div className="border-t border-slate-700/70 px-3 py-4">
+        <button
+          type="button"
+          onClick={() => console.log("Logout triggered")}
+          className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200"
+        >
+          <LogOut size={17} strokeWidth={1.8} />
+
+          <span>Logout</span>
+        </button>
       </div>
     </aside>
   );
