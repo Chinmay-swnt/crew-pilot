@@ -38,3 +38,4 @@ class CrewRepository:
             .not_null("client_feedback") \
             .execute()
         return [row["client_feedback"] for row in res.data if row.get("client_feedback")]
+    
