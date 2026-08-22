@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import traceback
 
 from app.graph import crew_graph
 from app.schemas.api import AssemblyResponse, EventRequest
@@ -88,7 +89,13 @@ async def assemble_crew(request: EventRequest):
         )
 
     except Exception as exc:
+        print("\n" + "=" * 80)
+        print("CREWPILOT AI ENGINE ERROR")
+        print("=" * 80)
+        traceback.print_exc()
+        print("=" * 80 + "\n")
+
         raise HTTPException(
             status_code=500,
-            detail=str(exc),
+            detail=f"{type(exc).__name__}: {exc}",
         ) from exc
