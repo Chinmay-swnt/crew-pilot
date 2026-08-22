@@ -10,106 +10,20 @@ from app.tools.intent_tools import (
 )
 
 
-def _safe_float(
-    value: Any,
-    default: float = 0.0,
-) -> float:
-    """
-    Safely convert a value to float.
-
-    Handles:
-    - None
-    - strings
-    - invalid values
-    """
-    if value is None:
-        return default
-
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _safe_int(
-    value: Any,
-    default: int = 0,
-) -> int:
-    """
-    Safely convert a value to int.
-    """
-    if value is None:
-        return default
-
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _normalize_roles(
-    roles: Any,
-) -> list[dict[str, Any]]:
-    """
-    Normalize the extracted roles into a predictable structure.
-    """
-    if not isinstance(roles, list):
-        return []
-
-    normalized_roles: list[dict[str, Any]] = []
-
-    for item in roles:
-        if not isinstance(item, dict):
-            continue
-
-        role_name = item.get("role")
-
-        if not role_name:
-            continue
-
-        normalized_roles.append(
-            {
-                "role": str(role_name).strip(),
-                "count": max(
-                    1,
-                    _safe_int(
-                        item.get("count"),
-                        1,
-                    ),
-                ),
-            }
-        )
-
-    return normalized_roles
-
-
 def event_intent_agent(
     state: CrewAssemblyState,
 ) -> CrewAssemblyState:
 
-    raw_description = state.get(
-        "raw_description",
-        "",
-    ).strip()
-
-    if not raw_description:
-        raise ValueError(
-            "Event description cannot be empty."
-        )
-
-    llm = get_llm(
-        temperature=0.1
-    )
+    llm = get_llm(temperature=0.1)
 
     tools = [
         classify_event_tier,
         validate_budget,
     ]
 
-    llm_with_tools = llm.bind_tools(
-        tools
-    )
+    llm_with_tools = llm.bind_tools(tools)
 
+    # Understand and extract the event requirements
     prompt = ChatPromptTemplate.from_messages(
         [
             (
@@ -139,13 +53,8 @@ Extract and structure:
   - cost > quality
   - balanced
 
-Rules:
-- Do not invent missing values.
-- If budget is not provided, return 0.
-- If guest count is not provided, return 0.
-- If date is not provided, return null.
-- Roles must have a positive integer count.
-- Keep role names concise and human-readable.
+Do not invent missing values.
+If a value is not provided, use a reasonable null/empty representation.
 """,
             ),
             (
@@ -155,14 +64,11 @@ Rules:
         ]
     )
 
-    # Run the tool-capable reasoning pass.
-    # The explicit structured-output pass below is still
-    # responsible for producing the final normalized object.
     chain = prompt | llm_with_tools
 
     chain.invoke(
         {
-            "raw_description": raw_description,
+            "raw_description": state["raw_description"],
         }
     )
 
@@ -187,10 +93,8 @@ Rules:
                     "type": "integer",
                 },
                 "date": {
-                    "type": [
-                        "string",
-                        "null",
-                    ],
+                    "type": "string",
+                    "nullable": True,
                 },
                 "roles": {
                     "type": "array",
@@ -214,10 +118,8 @@ Rules:
                     "type": "string",
                 },
                 "budget_warning": {
-                    "type": [
-                        "string",
-                        "null",
-                    ],
+                    "type": "string",
+                    "nullable": True,
                 },
             },
             "required": [
@@ -226,104 +128,69 @@ Rules:
                 "location",
                 "budget",
                 "guest_count",
-                "date",
                 "roles",
                 "priority",
             ],
         }
     )
 
-    requirements_raw = structured_llm.invoke(
-        raw_description
+    requirements: Dict[str, Any] = structured_llm.invoke(
+        state["raw_description"]
     )
 
-    # Normalize the LLM result.
-    requirements: Dict[str, Any] = dict(
-        requirements_raw
-    )
-
-    event_type = str(
-        requirements.get(
-            "event_type",
-            "event",
-        ) or "event"
-    ).strip()
-
-    tier = str(
-        requirements.get(
-            "tier",
-            "standard",
-        )
-        or "standard"
-    ).strip()
-
-    location = str(
-        requirements.get(
-            "location",
-            "",
-        )
-        or ""
-    ).strip()
-
-    budget = _safe_float(
-        requirements.get("budget"),
-        0.0,
-    )
-
-    guest_count = _safe_int(
-        requirements.get("guest_count"),
-        0,
-    )
-
-    date = requirements.get("date")
-
-    if date is not None:
-        date = str(date).strip()
-
-        if not date:
-            date = None
-
-    priority = str(
-        requirements.get(
-            "priority",
-            "balanced",
-        )
-        or "balanced"
-    ).strip()
-
-    roles = _normalize_roles(
-        requirements.get("roles")
-    )
-
-    requirements["event_type"] = event_type
-    requirements["tier"] = tier
-    requirements["location"] = location
-    requirements["budget"] = budget
-    requirements["guest_count"] = guest_count
-    requirements["date"] = date
-    requirements["roles"] = roles
-    requirements["priority"] = priority
-
-    # IMPORTANT:
-    # Validate the normalized values, not raw LLM output.
     budget_check = validate_budget.invoke(
         {
-            "budget": budget,
-            "guest_count": guest_count,
-            "tier": tier,
-            "roles": roles,
+            "budget": requirements.get(
+                "budget",
+                0,
+            ),
+            "guest_count": requirements.get(
+                "guest_count",
+                0,
+            ),
+            "tier": requirements.get(
+                "tier",
+                "standard",
+            ),
+            "roles": requirements.get(
+                "roles",
+                [],
+            ),
         }
     )
 
-    budget_warning = budget_check.get(
-        "warning"
+    requirements["budget_warning"] = (
+        budget_check.get("warning")
     )
 
-    requirements["budget_warning"] = (
-        budget_warning
+    # Add safe AI activity messages
+    progress = state.get(
+        "progress",
+        []
+    ).copy()
+
+    progress.append(
+        "✓ Understanding your event requirements"
+    )
+
+    progress.append(
+        f"✓ Identified {requirements.get('event_type', 'event')} "
+        f"in {requirements.get('location', 'the selected location')}"
+    )
+
+    progress.append(
+        f"✓ Identified {len(requirements.get('roles', []))} "
+        "required crew roles"
+    )
+
+    progress.append(
+        "✓ Event constraints analyzed"
     )
 
     return {
         "event_requirements": requirements,
-        "budget_warning": budget_warning,
+        "budget_warning": budget_check.get(
+            "warning"
+        ),
+        "progress": progress,
     }

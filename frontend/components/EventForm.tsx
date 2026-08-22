@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   X,
   Pencil,
@@ -13,16 +13,23 @@ import {
   SlidersHorizontal,
   Calendar,
   Loader2,
-  Trash2,
   AlertTriangle,
+  ShieldCheck,
+  UserRound,
+  Trash2,
 } from "lucide-react";
 
-import { assembleCrewWithAI, AIAssemblyResponse } from "../lib/ai-api";
+import {
+  assembleCrewWithAI,
+  AIAssemblyResponse,
+} from "../lib/ai-api";
 
 interface CreateEventModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onFindOptimalCrew?: (data: AIAssemblyResponse) => void;
+  onFindOptimalCrew?: (
+    data: AIAssemblyResponse
+  ) => void;
   initialDescription?: string;
 }
 
@@ -32,45 +39,66 @@ interface CrewRequirement {
   count: number;
 }
 
-interface EventDetails {
-  eventType: string;
-  location: string;
-  date: string;
-  guests: number;
-}
-
-interface Parameters {
-  budget: string;
-  priorities: string[];
-}
-
-const DEFAULT_DESCRIPTION =
-  "I am organizing a premium wedding in Pune on 20 September 2026 for 300 guests. My budget is ₹1,00,000. I need 2 photographers, 1 cinematic videographer, 1 DJ, and 1 decorator. Reliability and premium quality are important.";
+type InputMode = "ai" | "manual";
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 0,
-  }).format(value);
+  }).format(value || 0);
 }
 
-function formatDisplayDate(value?: string | null): string {
-  if (!value) {
-    return "Not specified";
-  }
+function formatDate(value?: string | null): string {
+  if (!value) return "Not specified";
 
-  const parsed = new Date(`${value}T00:00:00`);
+  const date = new Date(`${value}T00:00:00`);
 
-  if (Number.isNaN(parsed.getTime())) {
+  if (Number.isNaN(date.getTime())) {
     return value;
   }
 
-  return parsed.toLocaleDateString("en-IN", {
+  return date.toLocaleDateString("en-IN", {
     day: "numeric",
     month: "long",
     year: "numeric",
   });
+}
+
+function buildDescriptionFromFields(data: {
+  eventType: string;
+  location: string;
+  date: string;
+  guests: number;
+  budget: number;
+  priority: string;
+  requiredCrew: CrewRequirement[];
+}): string {
+  const roles = data.requiredCrew
+    .filter((role) => role.role.trim())
+    .map(
+      (role) =>
+        `${role.count} ${role.role}`
+    )
+    .join(", ");
+
+  return [
+    `I am organizing a ${data.eventType || "event"}`,
+    data.location ? `in ${data.location}` : "",
+    data.date ? `on ${data.date}` : "",
+    data.guests > 0 ? `for ${data.guests} guests` : "",
+    data.budget > 0
+      ? `with a budget of ₹${data.budget}`
+      : "",
+    roles ? `I need ${roles}` : "",
+    data.priority
+      ? `Priority is ${data.priority}`
+      : "",
+    ".",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+\./, ".");
 }
 
 export default function CreateEventModal({
@@ -79,137 +107,268 @@ export default function CreateEventModal({
   onFindOptimalCrew,
   initialDescription,
 }: CreateEventModalProps) {
-  const [rawDescription, setRawDescription] = useState(
-    initialDescription || DEFAULT_DESCRIPTION,
-  );
+  const [inputMode, setInputMode] =
+    useState<InputMode>("ai");
 
-  const [eventDetails, setEventDetails] = useState<EventDetails>({
-    eventType: "",
-    location: "",
-    date: "",
-    guests: 0,
-  });
+  const [rawDescription, setRawDescription] =
+    useState(
+      initialDescription ||
+        "I am organizing a premium wedding in Pune on 20 September 2026 for 300 guests. My budget is ₹1,00,000. I need 2 photographers, 1 cinematic videographer, 1 DJ, and 1 decorator. Reliability and premium quality are important."
+    );
 
-  const [parameters, setParameters] = useState<Parameters>({
-    budget: "",
-    priorities: [],
-  });
+  const [analysis, setAnalysis] =
+    useState<AIAssemblyResponse | null>(null);
 
-  const [requiredCrew, setRequiredCrew] = useState<CrewRequirement[]>([]);
+  const [isAnalyzing, setIsAnalyzing] =
+    useState(false);
 
-  const [analysis, setAnalysis] = useState<AIAssemblyResponse | null>(null);
+  const [error, setError] =
+    useState<string | null>(null);
 
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [eventType, setEventType] =
+    useState("");
 
-  const [error, setError] = useState<string | null>(null);
+  const [location, setLocation] =
+    useState("");
 
-  const [isEditingDetails, setIsEditingDetails] = useState(false);
+  const [date, setDate] =
+    useState("");
 
-  const [budgetInput, setBudgetInput] = useState("");
+  const [guests, setGuests] =
+    useState<number | "">("");
 
-  const [isEditingPriorities, setIsEditingPriorities] = useState(false);
+  const [budget, setBudget] =
+    useState<number | "">("");
 
-  const [newPriority, setNewPriority] = useState("");
+  const [priority, setPriority] =
+    useState("balanced");
 
-  const [newRoleName, setNewRoleName] = useState("");
+  const [requiredCrew, setRequiredCrew] =
+    useState<CrewRequirement[]>([
+      {
+        id: "1",
+        role: "Photographer",
+        count: 2,
+      },
+      {
+        id: "2",
+        role: "Cinematic Videographer",
+        count: 1,
+      },
+      {
+        id: "3",
+        role: "DJ",
+        count: 1,
+      },
+      {
+        id: "4",
+        role: "Decorator",
+        count: 1,
+      },
+    ]);
 
-  const [isAddingRole, setIsAddingRole] = useState(false);
+  const [isEditingDetails, setIsEditingDetails] =
+    useState(false);
+
+  const [isAddingRole, setIsAddingRole] =
+    useState(false);
+
+  const [newRole, setNewRole] =
+    useState("");
+
+  const [activityMessages, setActivityMessages] =
+    useState<string[]>([]);
+
+  const aiMessages = [
+    "Understanding event requirements...",
+    "Extracting event type, location and constraints...",
+    "Identifying required crew roles...",
+    "Searching available crew...",
+    "Finding the best matches...",
+    "Checking crew availability...",
+    "Reviewing crew ratings and performance...",
+    "Comparing reliability and previous feedback...",
+    "Optimising the team for your budget...",
+    "Selecting the strongest primary crew...",
+    "Finding suitable backup crew...",
+    "Finalising recommendation...",
+  ];
 
   useEffect(() => {
-    if (!isOpen) {
+    if (!isAnalyzing) {
       return;
     }
 
-    if (initialDescription) {
-      setRawDescription(initialDescription);
-    }
-  }, [isOpen, initialDescription]);
+    setActivityMessages([]);
 
-  const hasAnalysis = Boolean(analysis);
+    let index = 0;
 
-  const normalizedBudget = useMemo(() => {
-    const numericValue = Number(budgetInput.replace(/[^0-9.]/g, ""));
+    const interval = setInterval(() => {
+      if (index >= aiMessages.length) {
+        clearInterval(interval);
+        return;
+      }
 
-    return Number.isFinite(numericValue) ? numericValue : 0;
-  }, [budgetInput]);
+      setActivityMessages((current) => [
+        ...current,
+        aiMessages[index],
+      ]);
+
+      index += 1;
+    }, 850);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [isAnalyzing]);
 
   if (!isOpen) {
     return null;
   }
 
-  const handleAnalyze = async () => {
-    const description = rawDescription.trim();
-
-    if (description.length < 10) {
-      setError("Please provide a proper event description.");
+  const handleAnalyzeWithAI = async (
+    description: string
+  ) => {
+    if (description.trim().length < 10) {
+      setError(
+        "Please provide more information about your event."
+      );
       return;
     }
 
     setError(null);
+    setAnalysis(null);
+    setActivityMessages([]);
     setIsAnalyzing(true);
 
     try {
-      const result = await assembleCrewWithAI(description);
+      const result =
+        await assembleCrewWithAI(
+          description.trim()
+        );
+
+      const requirements =
+        result.event_requirements;
 
       setAnalysis(result);
 
-      const extracted = result.event_requirements;
+      setEventType(
+        requirements.event_type || ""
+      );
 
-      setEventDetails({
-        eventType: extracted.event_type || "",
-        location: extracted.location || "",
-        date: extracted.date || "",
-        guests: extracted.guest_count || 0,
-      });
+      setLocation(
+        requirements.location || ""
+      );
 
-      setParameters({
-        budget: formatCurrency(extracted.budget || 0),
-        priorities: extracted.priority ? [extracted.priority] : [],
-      });
+      setDate(
+        requirements.date || ""
+      );
 
-      setBudgetInput(String(extracted.budget || 0));
+      setGuests(
+        requirements.guest_count || 0
+      );
+
+      setBudget(
+        requirements.budget || 0
+      );
+
+      setPriority(
+        requirements.priority || "balanced"
+      );
 
       setRequiredCrew(
-        (extracted.roles || []).map((item, index) => ({
-          id: `${Date.now()}-${index}`,
-          role: item.role,
-          count: item.count,
-        })),
+        (requirements.roles || []).map(
+          (role, index) => ({
+            id: `${Date.now()}-${index}`,
+            role: role.role,
+            count: role.count,
+          })
+        )
       );
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Unable to reach the AI engine.",
+        err instanceof Error
+          ? err.message
+          : "AI analysis failed."
       );
-      setAnalysis(null);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const handleUpdateDetails = () => {
-    const numericGuests = Number(eventDetails.guests);
-
-    setEventDetails({
-      ...eventDetails,
-      guests: Number.isFinite(numericGuests) ? numericGuests : 0,
-    });
+  const handleAIAnalysis = async () => {
+    await handleAnalyzeWithAI(
+      rawDescription
+    );
   };
 
-  const handleSaveBudget = () => {
-    const numericBudget = normalizedBudget;
+  const handleManualAnalysis = async () => {
+    const numericGuests =
+      Number(guests) || 0;
 
-    setParameters({
-      ...parameters,
-      budget: numericBudget > 0 ? formatCurrency(numericBudget) : "",
-    });
+    const numericBudget =
+      Number(budget) || 0;
 
-    setIsEditingDetails(false);
+    if (!eventType.trim()) {
+      setError("Enter an event type.");
+      return;
+    }
+
+    if (!location.trim()) {
+      setError("Enter an event location.");
+      return;
+    }
+
+    if (!date) {
+      setError("Select an event date.");
+      return;
+    }
+
+    if (numericGuests <= 0) {
+      setError(
+        "Guest count must be greater than 0."
+      );
+      return;
+    }
+
+    if (numericBudget <= 0) {
+      setError(
+        "Budget must be greater than 0."
+      );
+      return;
+    }
+
+    if (requiredCrew.length === 0) {
+      setError(
+        "Add at least one required crew role."
+      );
+      return;
+    }
+
+    const generatedDescription =
+      buildDescriptionFromFields({
+        eventType,
+        location,
+        date,
+        guests: numericGuests,
+        budget: numericBudget,
+        priority,
+        requiredCrew,
+      });
+
+    setRawDescription(
+      generatedDescription
+    );
+
+    await handleAnalyzeWithAI(
+      generatedDescription
+    );
   };
 
   const handleAddRole = () => {
-    const role = newRoleName.trim();
+    const roleName = newRole.trim();
 
-    if (!role) {
+    if (!roleName) {
       return;
     }
 
@@ -217,597 +376,1117 @@ export default function CreateEventModal({
       ...current,
       {
         id: `${Date.now()}`,
-        role,
+        role: roleName,
         count: 1,
       },
     ]);
 
-    setNewRoleName("");
+    setNewRole("");
     setIsAddingRole(false);
   };
 
-  const handleRemoveRole = (id: string) => {
-    setRequiredCrew((current) => current.filter((item) => item.id !== id));
-  };
-
-  const handleChangeRoleCount = (id: string, count: number) => {
+  const handleRemoveRole = (
+    id: string
+  ) => {
     setRequiredCrew((current) =>
-      current.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              count: Math.max(1, count),
-            }
-          : item,
-      ),
+      current.filter(
+        (role) => role.id !== id
+      )
     );
   };
 
-  const handleAddPriority = () => {
-    const priority = newPriority.trim();
-
-    if (!priority || parameters.priorities.includes(priority)) {
-      return;
-    }
-
-    setParameters((current) => ({
-      ...current,
-      priorities: [...current.priorities, priority],
-    }));
-
-    setNewPriority("");
+  const handleChangeQuantity = (
+    id: string,
+    quantity: number
+  ) => {
+    setRequiredCrew((current) =>
+      current.map((role) =>
+        role.id === id
+          ? {
+              ...role,
+              count: Math.max(
+                1,
+                quantity || 1
+              ),
+            }
+          : role
+      )
+    );
   };
 
-  const handleRemovePriority = (priority: string) => {
-    setParameters((current) => ({
-      ...current,
-      priorities: current.priorities.filter((item) => item !== priority),
-    }));
-  };
+  const handleUseRecommendation =
+    () => {
+      if (!analysis) {
+        return;
+      }
 
-  const handleSubmit = () => {
-    if (!analysis) {
-      return;
-    }
+      const updatedResult: AIAssemblyResponse =
+        {
+          ...analysis,
 
-    const updatedResult: AIAssemblyResponse = {
-      ...analysis,
-      event_requirements: {
-        ...analysis.event_requirements,
-        event_type: eventDetails.eventType,
-        location: eventDetails.location,
-        date: eventDetails.date || null,
-        guest_count: eventDetails.guests,
-        budget: normalizedBudget || analysis.event_requirements.budget,
-        roles: requiredCrew.map((item) => ({
-          role: item.role,
-          count: item.count,
-        })),
-        priority: parameters.priorities.join(" > "),
-      },
+          event_requirements: {
+            ...analysis.event_requirements,
+            event_type: eventType,
+            location,
+            date: date || null,
+            guest_count:
+              Number(guests) || 0,
+            budget:
+              Number(budget) || 0,
+            priority,
+            roles: requiredCrew.map(
+              (role) => ({
+                role: role.role,
+                count: role.count,
+              })
+            ),
+          },
+        };
+
+      onFindOptimalCrew?.(
+        updatedResult
+      );
     };
-
-    onFindOptimalCrew?.(updatedResult);
-
-    onClose();
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="relative w-full max-w-5xl bg-[#F8FAFC] rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto flex flex-col">
+
+      <div className="relative w-full max-w-6xl bg-[#F8FAFC] rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto">
+
         {/* HEADER */}
         <div className="h-14 bg-white border-b border-slate-200 px-6 flex items-center justify-between">
+
           <div className="flex items-center gap-2 text-sm font-semibold">
+
             <div className="flex items-center gap-1.5 text-slate-900">
-              <Sparkles size={16} className="text-blue-600" />
-              <span className="font-bold">CrewPilot</span>
+
+              <Sparkles
+                size={16}
+                className="text-blue-600"
+              />
+
+              <span className="font-bold">
+                CrewPilot
+              </span>
             </div>
 
-            <span className="text-slate-300">/</span>
+            <span className="text-slate-300">
+              /
+            </span>
 
-            <span className="text-slate-500 font-medium">Create Event</span>
+            <span className="text-slate-500">
+              Create Event
+            </span>
           </div>
 
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg"
             aria-label="Close"
           >
             <X size={18} />
           </button>
         </div>
 
-        {/* CONTENT */}
         <div className="p-8 space-y-6">
-          {/* EVENT DESCRIPTION */}
+
+          {/* TITLE */}
           <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-[11px] font-bold tracking-wide uppercase mb-3">
+
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold uppercase">
               <Sparkles size={13} />
-              <span>AI Crew Assembly</span>
+              AI Crew Assembly
             </div>
 
-            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-              Describe your event
+            <h2 className="text-3xl font-extrabold text-slate-900 mt-3">
+              Create your event
             </h2>
 
-            <p className="text-slate-500 text-sm mt-1 mb-4">
-              Gemini will extract the event requirements, discover crew, review
-              performance data, and assemble primary and backup teams.
+            <p className="text-slate-500 text-sm mt-1">
+              Describe your event naturally or
+              enter the details directly. CrewPilot
+              will use the same AI assembly pipeline
+              either way.
             </p>
-
-            <textarea
-              value={rawDescription}
-              onChange={(event) => setRawDescription(event.target.value)}
-              rows={5}
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 resize-none"
-              placeholder="Example: I need 2 photographers and 1 videographer for a wedding in Pune on 20 September for 300 guests with a budget of ₹1,00,000."
-            />
-
-            <div className="flex items-center justify-between mt-3">
-              <span className="text-xs text-slate-400">
-                {rawDescription.length} characters
-              </span>
-
-              <button
-                onClick={handleAnalyze}
-                disabled={isAnalyzing}
-                className="bg-blue-700 hover:bg-blue-800 disabled:bg-blue-300 text-white font-bold text-sm px-6 py-3 rounded-xl flex items-center gap-2 transition-colors"
-              >
-                {isAnalyzing ? (
-                  <>
-                    <Loader2 size={17} className="animate-spin" />
-                    <span>Analyzing event...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={17} />
-                    <span>Analyze with AI</span>
-                  </>
-                )}
-              </button>
-            </div>
           </div>
 
-          {/* ERROR */}
-          {error && (
-            <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">
-              <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+          {/* MODE SWITCH */}
+          <div className="bg-white border border-slate-200 rounded-xl p-1.5 flex gap-1">
 
-              <div>
-                <p className="font-bold text-sm">AI analysis failed</p>
+            <button
+              onClick={() =>
+                setInputMode("ai")
+              }
+              className={`flex-1 flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold transition ${
+                inputMode === "ai"
+                  ? "bg-blue-700 text-white"
+                  : "text-slate-500 hover:bg-slate-50"
+              }`}
+            >
+              <Sparkles size={16} />
+              Describe with AI
+            </button>
 
-                <p className="text-sm mt-1">{error}</p>
+            <button
+              onClick={() =>
+                setInputMode("manual")
+              }
+              className={`flex-1 flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold transition ${
+                inputMode === "manual"
+                  ? "bg-blue-700 text-white"
+                  : "text-slate-500 hover:bg-slate-50"
+              }`}
+            >
+              <Pencil size={16} />
+              Enter manually
+            </button>
+          </div>
+
+          {/* AI MODE */}
+          {inputMode === "ai" && (
+            <div className="bg-white border border-slate-200 rounded-2xl p-6">
+
+              <label className="block text-sm font-bold text-slate-800 mb-2">
+                Describe your event
+              </label>
+
+              <textarea
+                value={rawDescription}
+                onChange={(e) =>
+                  setRawDescription(
+                    e.target.value
+                  )
+                }
+                rows={6}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 resize-none"
+                placeholder="Example: I am organizing a premium wedding in Pune..."
+              />
+
+              <div className="flex items-center justify-between mt-3">
+
+                <span className="text-xs text-slate-400">
+                  {rawDescription.length} characters
+                </span>
+
+                <button
+                  onClick={
+                    handleAIAnalysis
+                  }
+                  disabled={
+                    isAnalyzing
+                  }
+                  className="bg-blue-700 hover:bg-blue-800 disabled:bg-blue-300 text-white font-bold px-6 py-3 rounded-xl flex items-center gap-2"
+                >
+                  {isAnalyzing ? (
+                    <>
+                      <Loader2
+                        size={17}
+                        className="animate-spin"
+                      />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={17} />
+                      Analyze with AI
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           )}
 
-          {/* ANALYSIS */}
-          {hasAnalysis && (
-            <>
-              {/* TITLE */}
-              <div>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 border border-purple-100 text-purple-700 text-[11px] font-bold tracking-wide uppercase mb-3">
-                  <CheckCircle2
-                    size={13}
-                    className="fill-purple-600 text-white"
+          {/* MANUAL MODE */}
+          {inputMode === "manual" && (
+            <div className="space-y-5">
+
+              <div className="bg-white border border-slate-200 rounded-2xl p-6">
+
+                <div className="flex items-center gap-2 mb-5">
+
+                  <Calendar
+                    size={18}
+                    className="text-blue-600"
                   />
-                  <span>AI Analysis Complete</span>
+
+                  <h3 className="font-bold text-slate-900">
+                    Event Details
+                  </h3>
                 </div>
 
-                <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-                  Here’s what we understood
-                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-                <p className="text-slate-500 text-sm mt-1">
-                  Review the extracted requirements before using them for crew
-                  assembly.
-                </p>
-              </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">
+                      Event Type
+                    </label>
 
-              {/* EVENT DETAILS + PARAMETERS */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
-                {/* EVENT DETAILS */}
-                <div className="md:col-span-7 bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
-                  <div className="flex items-center justify-between mb-5 border-b border-slate-100 pb-3">
-                    <div className="flex items-center gap-2 text-slate-800 font-bold text-base">
-                      <Calendar size={18} className="text-slate-500" />
-                      <span>Event Details</span>
-                    </div>
-
-                    <button
-                      onClick={() => setIsEditingDetails((value) => !value)}
-                      className="text-slate-400 hover:text-slate-600 p-1 transition-colors"
-                      aria-label="Edit event details"
-                    >
-                      <Pencil size={16} />
-                    </button>
-                  </div>
-
-                  {isEditingDetails ? (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="text-xs font-semibold text-slate-400 block mb-1">
-                          Event Type
-                        </label>
-
-                        <input
-                          value={eventDetails.eventType}
-                          onChange={(event) =>
-                            setEventDetails({
-                              ...eventDetails,
-                              eventType: event.target.value,
-                            })
-                          }
-                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-semibold text-slate-400 block mb-1">
-                          Location
-                        </label>
-
-                        <input
-                          value={eventDetails.location}
-                          onChange={(event) =>
-                            setEventDetails({
-                              ...eventDetails,
-                              location: event.target.value,
-                            })
-                          }
-                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-xs font-semibold text-slate-400 block mb-1">
-                            Date
-                          </label>
-
-                          <input
-                            type="date"
-                            value={eventDetails.date}
-                            onChange={(event) =>
-                              setEventDetails({
-                                ...eventDetails,
-                                date: event.target.value,
-                              })
-                            }
-                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-xs font-semibold text-slate-400 block mb-1">
-                            Guests
-                          </label>
-
-                          <input
-                            type="number"
-                            min={1}
-                            value={eventDetails.guests}
-                            onChange={(event) =>
-                              setEventDetails({
-                                ...eventDetails,
-                                guests: Number(event.target.value),
-                              })
-                            }
-                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-y-4 gap-x-6">
-                      <div>
-                        <span className="text-xs font-semibold text-slate-400 block mb-1">
-                          Event Type
-                        </span>
-
-                        <span className="text-base font-bold text-slate-800">
-                          {eventDetails.eventType}
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-xs font-semibold text-slate-400 block mb-1">
-                          Location
-                        </span>
-
-                        <span className="text-base font-bold text-slate-800 flex items-center gap-1">
-                          <MapPin size={14} className="text-slate-400" />
-                          {eventDetails.location}
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-xs font-semibold text-slate-400 block mb-1">
-                          Date
-                        </span>
-
-                        <span className="text-base font-bold text-slate-800">
-                          {formatDisplayDate(eventDetails.date)}
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-xs font-semibold text-slate-400 block mb-1">
-                          Guests
-                        </span>
-
-                        <span className="text-base font-bold text-slate-800 flex items-center gap-1">
-                          <Users size={14} className="text-slate-400" />
-                          {eventDetails.guests}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* PARAMETERS */}
-                <div className="md:col-span-5 bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
-                  <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
-                    <div className="flex items-center gap-2 text-slate-800 font-bold text-base">
-                      <SlidersHorizontal size={18} className="text-slate-500" />
-
-                      <span>Parameters</span>
-                    </div>
-                  </div>
-
-                  <div className="mb-5">
-                    <span className="text-xs font-semibold text-slate-400 block mb-1">
-                      Budget Allocation
-                    </span>
-
-                    {isEditingDetails ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          value={budgetInput}
-                          onChange={(event) =>
-                            setBudgetInput(event.target.value)
-                          }
-                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-lg font-bold"
-                        />
-
-                        <button
-                          onClick={handleSaveBudget}
-                          className="text-xs font-bold px-3 py-2 rounded-lg bg-blue-700 text-white"
-                        >
-                          Save
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-2xl font-black text-slate-900 tracking-tight">
-                        {parameters.budget}
-                      </span>
-                    )}
+                    <input
+                      value={eventType}
+                      onChange={(e) =>
+                        setEventType(
+                          e.target.value
+                        )
+                      }
+                      placeholder="Wedding, Concert, Corporate Event..."
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
                   </div>
 
                   <div>
-                    <span className="text-xs font-semibold text-slate-400 block mb-2">
-                      AI Priorities Detected
-                    </span>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">
+                      Location
+                    </label>
 
-                    <div className="flex flex-wrap gap-2">
-                      {parameters.priorities.map((priority) => (
-                        <span
-                          key={priority}
-                          className="bg-blue-50/80 text-blue-800 border border-blue-100 text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1"
-                        >
-                          {priority}
+                    <div className="relative">
 
-                          {isEditingPriorities && (
-                            <button
-                              onClick={() => handleRemovePriority(priority)}
-                              className="text-blue-500 hover:text-blue-900"
-                            >
-                              <X size={12} />
-                            </button>
-                          )}
-                        </span>
-                      ))}
-                    </div>
+                      <MapPin
+                        size={16}
+                        className="absolute left-3 top-3 text-slate-400"
+                      />
 
-                    <div className="mt-3 flex items-center gap-2">
-                      <button
-                        onClick={() =>
-                          setIsEditingPriorities((value) => !value)
+                      <input
+                        value={location}
+                        onChange={(e) =>
+                          setLocation(
+                            e.target.value
+                          )
                         }
-                        className="text-xs font-semibold text-slate-500 hover:text-slate-900"
-                      >
-                        {isEditingPriorities ? "Done" : "Edit priorities"}
-                      </button>
-
-                      {isEditingPriorities && (
-                        <>
-                          <input
-                            value={newPriority}
-                            onChange={(event) =>
-                              setNewPriority(event.target.value)
-                            }
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                handleAddPriority();
-                              }
-                            }}
-                            placeholder="Add priority"
-                            className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs"
-                          />
-
-                          <button
-                            onClick={handleAddPriority}
-                            className="text-xs font-bold text-blue-700"
-                          >
-                            Add
-                          </button>
-                        </>
-                      )}
+                        placeholder="Pune, Mumbai..."
+                        className="w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      />
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">
+                      Event Date
+                    </label>
+
+                    <input
+                      type="date"
+                      value={date}
+                      onChange={(e) =>
+                        setDate(
+                          e.target.value
+                        )
+                      }
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">
+                      Guest Count
+                    </label>
+
+                    <div className="relative">
+
+                      <Users
+                        size={16}
+                        className="absolute left-3 top-3 text-slate-400"
+                      />
+
+                      <input
+                        type="number"
+                        min={1}
+                        value={guests}
+                        onChange={(e) =>
+                          setGuests(
+                            e.target.value ===
+                              ""
+                              ? ""
+                              : Number(
+                                  e.target
+                                    .value
+                                )
+                          )
+                        }
+                        placeholder="300"
+                        className="w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">
+                      Budget (₹)
+                    </label>
+
+                    <input
+                      type="number"
+                      min={0}
+                      value={budget}
+                      onChange={(e) =>
+                        setBudget(
+                          e.target.value ===
+                            ""
+                            ? ""
+                            : Number(
+                                e.target.value
+                              )
+                        )
+                      }
+                      placeholder="100000"
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">
+                      Priority
+                    </label>
+
+                    <select
+                      value={priority}
+                      onChange={(e) =>
+                        setPriority(
+                          e.target.value
+                        )
+                      }
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-white"
+                    >
+                      <option value="balanced">
+                        Balanced
+                      </option>
+
+                      <option value="quality > cost">
+                        Quality over cost
+                      </option>
+
+                      <option value="cost > quality">
+                        Cost over quality
+                      </option>
+
+                      <option value="luxury">
+                        Luxury
+                      </option>
+                    </select>
                   </div>
                 </div>
               </div>
 
-              {/* BUDGET WARNING */}
-              {analysis?.budget_warning && (
-                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
-                  <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+              {/* ROLES */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 border-l-4 border-l-blue-600">
+
+                <div className="flex items-center justify-between mb-5">
 
                   <div>
-                    <p className="font-bold text-sm">Budget warning</p>
 
-                    <p className="text-sm mt-1">{analysis.budget_warning}</p>
+                    <div className="flex items-center gap-2">
+
+                      <Users
+                        size={18}
+                        className="text-blue-600"
+                      />
+
+                      <h3 className="font-bold text-slate-900">
+                        Required Crew
+                      </h3>
+                    </div>
+
+                    <p className="text-xs text-slate-400 mt-1">
+                      Add the roles you need for this event.
+                    </p>
                   </div>
+
+                  <button
+                    onClick={() =>
+                      setIsAddingRole(true)
+                    }
+                    className="border border-blue-200 bg-blue-50 text-blue-700 text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1"
+                  >
+                    <Plus size={14} />
+                    Add Role
+                  </button>
                 </div>
-              )}
-
-              {/* REQUIRED CREW */}
-              <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm border-l-4 border-l-blue-600">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2 text-slate-900 font-bold text-base">
-                    <Users size={18} className="text-blue-600" />
-                    <span>Required Crew</span>
-                  </div>
-
-                  {!isAddingRole && (
-                    <button
-                      onClick={() => setIsAddingRole(true)}
-                      className="border border-blue-200 bg-blue-50/50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
-                    >
-                      <Plus size={14} />
-                      Add Role
-                    </button>
-                  )}
-                </div>
-
-                <p className="text-xs text-slate-400 font-medium mb-5">
-                  These roles came from the AI requirement extraction. You can
-                  adjust them before assembly.
-                </p>
 
                 {isAddingRole && (
-                  <div className="mb-4 flex items-center gap-2">
+                  <div className="flex gap-2 mb-4">
+
                     <input
-                      value={newRoleName}
-                      onChange={(event) => setNewRoleName(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
+                      value={newRole}
+                      onChange={(e) =>
+                        setNewRole(
+                          e.target.value
+                        )
+                      }
+                      onKeyDown={(e) => {
+                        if (
+                          e.key === "Enter"
+                        ) {
                           handleAddRole();
                         }
                       }}
                       autoFocus
-                      placeholder="e.g. Lighting Technician"
-                      className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                      placeholder="Photographer, DJ, Decorator..."
+                      className="flex-1 rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
                     />
 
                     <button
-                      onClick={handleAddRole}
-                      className="px-3 py-2 rounded-lg bg-blue-700 text-white text-xs font-bold"
+                      onClick={
+                        handleAddRole
+                      }
+                      className="bg-blue-700 text-white rounded-lg px-4 text-xs font-bold"
                     >
                       Add
                     </button>
 
                     <button
-                      onClick={() => setIsAddingRole(false)}
-                      className="px-3 py-2 rounded-lg border border-slate-200 text-xs font-bold"
+                      onClick={() =>
+                        setIsAddingRole(
+                          false
+                        )
+                      }
+                      className="border border-slate-200 rounded-lg px-4 text-xs font-bold"
                     >
                       Cancel
                     </button>
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                  {requiredCrew.map((item) => (
-                    <div
-                      key={item.id}
-                      className="bg-slate-50/80 border border-slate-100 rounded-xl p-3.5"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <span className="w-8 h-8 rounded-lg bg-blue-100/70 text-blue-700 font-black text-sm flex items-center justify-center shrink-0">
-                            {item.count}
-                          </span>
+                <div className="space-y-3">
 
-                          <span className="text-xs font-bold text-slate-800 leading-snug">
-                            {item.role}
-                          </span>
+                  {requiredCrew.map(
+                    (role) => (
+                      <div
+                        key={role.id}
+                        className="flex items-center gap-3 bg-slate-50 border border-slate-100 rounded-xl p-3"
+                      >
+
+                        <div className="w-9 h-9 rounded-lg bg-blue-100 text-blue-700 font-black flex items-center justify-center text-sm">
+                          {role.count}
                         </div>
 
-                        <button
-                          onClick={() => handleRemoveRole(item.id)}
-                          className="text-slate-300 hover:text-red-500"
-                          aria-label={`Remove ${item.role}`}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-
-                      <div className="flex items-center gap-2 mt-3">
-                        <span className="text-[11px] text-slate-400 font-semibold">
-                          Quantity
-                        </span>
+                        <input
+                          value={role.role}
+                          onChange={(e) =>
+                            setRequiredCrew(
+                              (current) =>
+                                current.map(
+                                  (
+                                    currentRole
+                                  ) =>
+                                    currentRole.id ===
+                                    role.id
+                                      ? {
+                                          ...currentRole,
+                                          role: e
+                                            .target
+                                            .value,
+                                        }
+                                      : currentRole
+                                )
+                            )
+                          }
+                          className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-blue-500"
+                        />
 
                         <input
                           type="number"
                           min={1}
-                          value={item.count}
-                          onChange={(event) =>
-                            handleChangeRoleCount(
-                              item.id,
-                              Number(event.target.value),
+                          value={role.count}
+                          onChange={(e) =>
+                            handleChangeQuantity(
+                              role.id,
+                              Number(
+                                e.target
+                                  .value
+                              )
                             )
                           }
-                          className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold"
+                          className="w-20 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold"
                         />
+
+                        <button
+                          onClick={() =>
+                            handleRemoveRole(
+                              role.id
+                            )
+                          }
+                          className="text-slate-300 hover:text-red-500 p-2"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  )}
+                </div>
+
+                {requiredCrew.length ===
+                  0 && (
+                  <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">
+                    No crew roles added yet.
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end">
+
+                <button
+                  onClick={
+                    handleManualAnalysis
+                  }
+                  disabled={
+                    isAnalyzing
+                  }
+                  className="bg-blue-700 hover:bg-blue-800 disabled:bg-blue-300 text-white font-bold px-7 py-3.5 rounded-xl flex items-center gap-2"
+                >
+                  {isAnalyzing ? (
+                    <>
+                      <Loader2
+                        size={18}
+                        className="animate-spin"
+                      />
+                      Building crew...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={18} />
+                      Build Crew with AI
+                      <ArrowRight
+                        size={18}
+                      />
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* AI ACTIVITY */}
+          {isAnalyzing && (
+            <div className="bg-white border border-slate-200 rounded-2xl p-6">
+
+              <div className="flex items-center gap-3 mb-5">
+
+                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
+                  <Loader2
+                    size={17}
+                    className="animate-spin text-slate-600"
+                  />
+                </div>
+
+                <div>
+                  <p className="font-semibold text-slate-900">
+                    Working on your event...
+                  </p>
+
+                  <p className="text-xs text-slate-400">
+                    CrewPilot is processing the request
+                  </p>
                 </div>
               </div>
 
-              {/* AI OUTPUT PREVIEW */}
-              {analysis && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-white border border-slate-200 rounded-xl p-4">
-                    <p className="text-xs font-semibold text-slate-400">
-                      Primary Crew
-                    </p>
+              <div className="space-y-2.5 font-mono text-sm">
 
-                    <p className="text-2xl font-black text-slate-900 mt-1">
-                      {analysis.primary_crew.length}
-                    </p>
+                {activityMessages.map(
+                  (message, index) => (
+                    <div
+                      key={`${message}-${index}`}
+                      className="text-slate-600"
+                    >
+                      <span className="text-slate-300 mr-2">
+                        ›
+                      </span>
+
+                      {message}
+                    </div>
+                  )
+                )}
+
+                <div className="text-slate-900">
+                  <span className="text-slate-300 mr-2">
+                    ›
+                  </span>
+
+                  <span className="inline-flex items-center">
+                    <span>
+                      {activityMessages.length ===
+                      0
+                        ? "Starting analysis"
+                        : "Processing"}
+                    </span>
+
+                    <span className="animate-pulse ml-1">
+                      ...
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ERROR */}
+          {error && (
+            <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-red-800">
+
+              <AlertTriangle
+                size={18}
+                className="mt-0.5"
+              />
+
+              <div>
+
+                <p className="font-bold">
+                  AI analysis failed
+                </p>
+
+                <p className="text-sm mt-1">
+                  {error}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* AI RESULT */}
+          {analysis && !isAnalyzing && (
+            <>
+
+              <div className="pt-2 border-t border-slate-200" />
+
+              <div>
+
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-50 border border-purple-100 text-purple-700 text-xs font-bold uppercase">
+                  <CheckCircle2 size={14} />
+                  AI Analysis Complete
+                </div>
+
+                <h2 className="text-3xl font-extrabold text-slate-900 mt-3">
+                  Here’s what we understood
+                </h2>
+
+                <p className="text-slate-500 text-sm mt-1">
+                  Review the extracted requirements
+                  and AI-generated crew recommendation.
+                </p>
+              </div>
+
+              {/* DETAILS + SUMMARY */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+                <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+
+                  <div className="flex items-center justify-between mb-5 border-b border-slate-100 pb-3">
+
+                    <div className="flex items-center gap-2 font-bold text-slate-800">
+                      <Calendar size={18} />
+                      Event Details
+                    </div>
+
+                    <button
+                      onClick={() =>
+                        setIsEditingDetails(
+                          (current) =>
+                            !current
+                        )
+                      }
+                      className="text-slate-400 hover:text-slate-700"
+                    >
+                      <Pencil size={16} />
+                    </button>
                   </div>
 
-                  <div className="bg-white border border-slate-200 rounded-xl p-4">
-                    <p className="text-xs font-semibold text-slate-400">
-                      Backups
-                    </p>
+                  {isEditingDetails ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-                    <p className="text-2xl font-black text-slate-900 mt-1">
-                      {analysis.backup_crew.length}
-                    </p>
+                      <input
+                        value={eventType}
+                        onChange={(e) =>
+                          setEventType(
+                            e.target.value
+                          )
+                        }
+                        placeholder="Event type"
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                      />
+
+                      <input
+                        value={location}
+                        onChange={(e) =>
+                          setLocation(
+                            e.target.value
+                          )
+                        }
+                        placeholder="Location"
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                      />
+
+                      <input
+                        type="date"
+                        value={date}
+                        onChange={(e) =>
+                          setDate(
+                            e.target.value
+                          )
+                        }
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                      />
+
+                      <input
+                        type="number"
+                        value={guests}
+                        onChange={(e) =>
+                          setGuests(
+                            Number(
+                              e.target.value
+                            )
+                          )
+                        }
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                      />
+
+                      <input
+                        type="number"
+                        value={budget}
+                        onChange={(e) =>
+                          setBudget(
+                            Number(
+                              e.target.value
+                            )
+                          )
+                        }
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                      />
+
+                      <button
+                        onClick={() =>
+                          setIsEditingDetails(
+                            false
+                          )
+                        }
+                        className="rounded-lg bg-blue-700 text-white font-bold px-4 py-2 text-sm"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-y-5 gap-x-6">
+
+                      <div>
+                        <p className="text-xs text-slate-400 font-semibold">
+                          Event Type
+                        </p>
+
+                        <p className="text-base font-bold text-slate-800 mt-1">
+                          {eventType}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-slate-400 font-semibold">
+                          Location
+                        </p>
+
+                        <p className="text-base font-bold text-slate-800 mt-1 flex items-center gap-1">
+                          <MapPin size={14} />
+                          {location}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-slate-400 font-semibold">
+                          Date
+                        </p>
+
+                        <p className="text-base font-bold text-slate-800 mt-1">
+                          {formatDate(date)}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-slate-400 font-semibold">
+                          Guests
+                        </p>
+
+                        <p className="text-base font-bold text-slate-800 mt-1 flex items-center gap-1">
+                          <Users size={14} />
+                          {guests}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-slate-400 font-semibold">
+                          Budget
+                        </p>
+
+                        <p className="text-base font-bold text-slate-800 mt-1">
+                          {formatCurrency(
+                            Number(
+                              budget
+                            )
+                          )}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-slate-400 font-semibold">
+                          Priority
+                        </p>
+
+                        <p className="text-sm font-bold text-blue-700 mt-1">
+                          {priority}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+
+                  <div className="flex items-center gap-2 font-bold text-slate-800 mb-5 border-b border-slate-100 pb-3">
+                    <SlidersHorizontal size={18} />
+                    AI Decision Summary
                   </div>
 
-                  <div className="bg-white border border-slate-200 rounded-xl p-4">
-                    <p className="text-xs font-semibold text-slate-400">
-                      Estimated Primary Cost
+                  <div className="grid grid-cols-2 gap-5">
+
+                    <div>
+                      <p className="text-xs text-slate-400 font-semibold">
+                        Match Score
+                      </p>
+
+                      <p className="text-3xl font-black text-blue-700 mt-1">
+                        {Number(
+                          analysis.overall_match_score ||
+                            0
+                        ).toFixed(1)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-slate-400 font-semibold">
+                        Primary Cost
+                      </p>
+
+                      <p className="text-xl font-black text-slate-900 mt-1">
+                        {formatCurrency(
+                          analysis.total_cost
+                        )}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-slate-400 font-semibold">
+                        Primary Crew
+                      </p>
+
+                      <p className="text-xl font-black text-slate-900 mt-1">
+                        {
+                          analysis.primary_crew
+                            .length
+                        }
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-slate-400 font-semibold">
+                        Backups
+                      </p>
+
+                      <p className="text-xl font-black text-slate-900 mt-1">
+                        {
+                          analysis.backup_crew
+                            .length
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* BUDGET WARNING */}
+              {analysis.budget_warning && (
+                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-amber-900">
+
+                  <AlertTriangle size={18} />
+
+                  <div>
+                    <p className="font-bold">
+                      Budget warning
                     </p>
 
-                    <p className="text-2xl font-black text-slate-900 mt-1">
-                      {formatCurrency(analysis.total_cost)}
+                    <p className="text-sm mt-1">
+                      {analysis.budget_warning}
                     </p>
                   </div>
                 </div>
               )}
 
-              {/* PRIMARY ACTION */}
+              {/* PRIMARY CREW */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+
+                <div className="flex items-center gap-2 mb-5">
+
+                  <ShieldCheck
+                    size={20}
+                    className="text-emerald-600"
+                  />
+
+                  <div>
+
+                    <h3 className="font-bold text-slate-900">
+                      Recommended Primary Crew
+                    </h3>
+
+                    <p className="text-xs text-slate-400">
+                      AI-selected crew for the event
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+
+                  {analysis.primary_crew.map(
+                    (member, index) => (
+                      <div
+                        key={`${member.crew_member_id}-${index}`}
+                        className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-4"
+                      >
+
+                        <div className="flex items-center gap-3">
+
+                          <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center">
+                            <UserRound size={18} />
+                          </div>
+
+                          <div>
+
+                            <p className="font-bold text-slate-900">
+                              Crew #{member.crew_member_id}
+                            </p>
+
+                            <p className="text-xs text-slate-500">
+                              {member.role}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+
+                          <p className="text-sm font-black text-slate-900">
+                            {formatCurrency(
+                              member.agreed_rate
+                            )}
+                          </p>
+
+                          <p className="text-[11px] text-slate-400">
+                            agreed rate
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  )}
+
+                  {analysis.primary_crew.length ===
+                    0 && (
+                    <p className="text-sm text-slate-500">
+                      No primary crew returned.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* BACKUP CREW */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+
+                <div className="flex items-center gap-2 mb-5">
+
+                  <ShieldCheck
+                    size={20}
+                    className="text-amber-600"
+                  />
+
+                  <div>
+
+                    <h3 className="font-bold text-slate-900">
+                      Ranked Backup Crew
+                    </h3>
+
+                    <p className="text-xs text-slate-400">
+                      Fallback crew to reduce no-show risk
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+
+                  {analysis.backup_crew.map(
+                    (member, index) => (
+                      <div
+                        key={`${member.crew_member_id}-${index}`}
+                        className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-4"
+                      >
+
+                        <div className="flex items-center gap-3">
+
+                          <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-black text-xs">
+                            #{index + 1}
+                          </div>
+
+                          <div>
+
+                            <p className="font-bold text-slate-900">
+                              Crew #{member.crew_member_id}
+                            </p>
+
+                            <p className="text-xs text-slate-500">
+                              {member.role}
+                            </p>
+                          </div>
+                        </div>
+
+                        <p className="text-sm font-black text-slate-900">
+                          {formatCurrency(
+                            member.agreed_rate
+                          )}
+                        </p>
+                      </div>
+                    )
+                  )}
+
+                  {analysis.backup_crew.length ===
+                    0 && (
+                    <p className="text-sm text-slate-500">
+                      No backup crew returned.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* EXPLANATION */}
+              <div className="bg-slate-900 rounded-2xl p-6 text-white">
+
+                <div className="flex items-center gap-2 mb-3">
+
+                  <Sparkles
+                    size={18}
+                    className="text-blue-300"
+                  />
+
+                  <h3 className="font-bold">
+                    Why this team?
+                  </h3>
+                </div>
+
+                <p className="text-sm text-slate-300 leading-6">
+                  {analysis.team_explanation ||
+                    "The AI did not return an explanation."}
+                </p>
+              </div>
+
+              {/* FINAL ACTION */}
               <div className="flex justify-center pt-2">
+
                 <button
-                  onClick={handleSubmit}
-                  disabled={requiredCrew.length === 0}
-                  className="bg-blue-700 hover:bg-blue-800 disabled:bg-blue-300 text-white font-bold text-sm px-8 py-3.5 rounded-xl flex items-center gap-2 shadow-lg shadow-blue-600/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+                  onClick={
+                    handleUseRecommendation
+                  }
+                  className="bg-blue-700 hover:bg-blue-800 text-white font-bold text-sm px-8 py-4 rounded-xl flex items-center gap-2 shadow-lg"
                 >
-                  <span>Use AI Crew Recommendation</span>
+                  <span>
+                    Use This Crew Recommendation
+                  </span>
 
                   <ArrowRight size={18} />
                 </button>

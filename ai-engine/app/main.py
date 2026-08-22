@@ -1,19 +1,21 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import traceback
+from pydantic import BaseModel, Field
+from typing import Dict, Any, List, Optional
 
 from app.graph import crew_graph
-from app.schemas.api import AssemblyResponse, EventRequest
 
 
 app = FastAPI(
     title="Crew Assembly Multi-Agent AI API",
     version="1.0.0",
     description=(
-        "Multi-agent orchestration pipeline using Gemini, "
-        "LangGraph, pgvector, and Supabase."
+        "Multi-agent orchestration pipeline using "
+        "Gemini, pgvector, and Supabase."
     ),
 )
+
+#CORS
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,78 +26,182 @@ app.add_middleware(
 )
 
 
+# REQUEST MODELS
+class EventRequest(BaseModel):
+    raw_description: str = Field(
+        ...,
+        example=(
+            "We need 3 sound engineers, 2 stage managers, "
+            "and 1 lighting tech for a 500-person music "
+            "concert in Mumbai on 2026-11-15. "
+            "Total budget is ₹2,500,000."
+        ),
+    )
+
+
+class CrewMemberAssignment(BaseModel):
+    crew_member_id: int
+    role: str
+    agreed_rate: float
+
+
+# RESPONSE MODEL
+class AssemblyResponse(BaseModel):
+    event_requirements: Dict[str, Any]
+
+    budget_warning: Optional[str] = None
+
+    discovery_logs: List[str]
+
+    # AI progress/activity messages
+    progress: List[str]
+
+    primary_crew: List[CrewMemberAssignment]
+
+    backup_crew: List[CrewMemberAssignment]
+
+    total_cost: float
+
+    overall_match_score: float
+
+    team_explanation: str
+
+# HEALTH CHECK
+
 @app.get("/health")
-async def health_check():
+def health_check():
     return {
         "status": "ok",
         "service": "Crew Assembly AI Agent System",
     }
 
 
+# AI CREW ASSEMBLY
+
 @app.post(
     "/api/v1/assemble-crew",
     response_model=AssemblyResponse,
 )
-async def assemble_crew(request: EventRequest):
+async def assemble_crew(
+    request: EventRequest,
+):
+
     try:
+
+        # Initial LangGraph state
+
         initial_state = {
             "raw_description": request.raw_description,
+
             "event_requirements": {},
+
             "budget_warning": None,
+
             "candidates": {},
+
             "discovery_logs": [],
+
+            # Stores user-safe AI activity messages
+            "progress": [],
+
             "review_scores": {},
+
             "primary_crew": [],
+
             "backup_crew": [],
+
             "team_explanation": "",
+
             "total_cost": 0.0,
+
             "overall_match_score": 0.0,
         }
 
-        final_state = crew_graph.invoke(initial_state)
+        #  complete LangGraph pipeline
+        # Agent 1:
+        # Event Intent
+        
+        # Agent 2:
+        # Crew Discovery
+        
+        # Agent 3:
+        # Review Intelligence
+        
+        # Agent 4:
+        # Team Assembly
+
+        final_state = crew_graph.invoke(
+            initial_state
+        )
+
+        # Return final AI response
 
         return AssemblyResponse(
+
             event_requirements=final_state.get(
                 "event_requirements",
-                {}
+                {},
             ),
+
             budget_warning=final_state.get(
-                "budget_warning"
+                "budget_warning",
             ),
+
             discovery_logs=final_state.get(
                 "discovery_logs",
-                []
+                [],
             ),
+
+            progress=final_state.get(
+                "progress",
+                [],
+            ),
+
             primary_crew=final_state.get(
                 "primary_crew",
-                []
+                [],
             ),
+
             backup_crew=final_state.get(
                 "backup_crew",
-                []
+                [],
             ),
+
             total_cost=final_state.get(
                 "total_cost",
-                0.0
+                0.0,
             ),
+
             overall_match_score=final_state.get(
                 "overall_match_score",
-                0.0
+                0.0,
             ),
+
             team_explanation=final_state.get(
                 "team_explanation",
-                ""
+                "",
             ),
         )
 
-    except Exception as exc:
-        print("\n" + "=" * 80)
+    except Exception as e:
+
+        # Server-side debugging
+
+        print()
+        print("=" * 80)
         print("CREWPILOT AI ENGINE ERROR")
         print("=" * 80)
+
+        import traceback
+
         traceback.print_exc()
-        print("=" * 80 + "\n")
+
+        print("=" * 80)
+        print()
+
+        # Return useful error to frontend
 
         raise HTTPException(
             status_code=500,
-            detail=f"{type(exc).__name__}: {exc}",
-        ) from exc
+            detail=str(e),
+        )
